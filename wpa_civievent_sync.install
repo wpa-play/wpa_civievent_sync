@@ -1,0 +1,77 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Database schema
+ *
+ * Table 'wpa_civievent_sync_node'
+ *  connects nodes to CiviCRM organization contacts
+ *    - nid: node id
+ *    - civi_eid: CiviEvent ID
+ *
+ */
+
+
+
+/**
+ * Implementation of hook_install().
+ * Create table.
+ * Display a welcome message.
+ */
+function wpa_civievent_sync_install() {
+
+	drupal_install_schema('wpa_civievent_sync');
+
+}
+
+
+
+/**
+ * Implementation of hook_schema().
+ */
+function wpa_civievent_sync_schema() {
+
+	$schema['wpa_civievent_sync'] = array(
+
+		'description' => t('Associates Drupal Nodes with CiviCRM Events'),
+
+		'fields' => array(
+
+			'nid' => array(
+				'description' => t('Node'),
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => TRUE
+			),
+
+			'civi_eid' => array(
+				'description' => t('Event'),
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'not null' => TRUE
+			),
+
+		),
+
+		'primary key' => array('nid'),
+	);
+
+	return $schema;
+
+}
+
+
+
+/**
+ * Implementation of hook_uninstall().
+ * Drop the table.
+ */
+function wpa_civievent_sync_uninstall() {
+
+  // Remove tables.
+	drupal_uninstall_schema('wpa_civievent_sync');
+
+}
+
+

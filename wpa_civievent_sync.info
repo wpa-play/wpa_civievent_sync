@@ -1,0 +1,8 @@
+; $Id$
+name = WPA CiviEvent Sync
+description = Adds nodes tied to CiviCRM Events, providing a vocabulary for for different CiviCRM Event Types and Event Locations.
+dependencies[] = civicrm
+dependencies[] = date
+package = WPA
+version = 2012-10-01
+core = 6.x
