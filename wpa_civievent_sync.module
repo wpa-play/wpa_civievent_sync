@@ -1321,6 +1321,13 @@ function _wpa_civievent_sync_get_civi_event_id( &$node ) {
 /**
  * Get the CiviEvent ID for a Drupal node as object (sometimes we need the object
  * instead of the value, see hook_load() for example)
+ *
+ * We could do this as an anonymous object instead, eg:
+ *
+ * $obj = (object) array( 'foo' => 'bar', 'property' => 'value' );
+ * echo $obj->foo; // prints 'bar'
+ * echo $obj->property; // prints 'value'
+ *
  */
 function _wpa_civievent_sync_get_civi_event_id_object( &$node ) {
 
