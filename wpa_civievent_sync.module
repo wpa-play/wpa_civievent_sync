@@ -312,9 +312,8 @@ function wpa_civievent_sync_link($type, $node = NULL, $teaser = FALSE) {
 
 	// if node context AND there's a civi id loaded in the node object
 	if ( $type == 'node' && isset( $node->civi_eid ) ) {
-
-		//dsm($node->civi_id );
-
+		
+		// add link to CiviCRM Event page
 		if (user_access('access CiviEvent')) {
 			$links['wpa_civievent_sync_civilink'] = array(
 				'title' => 'CiviCRM Event page',
@@ -325,18 +324,21 @@ function wpa_civievent_sync_link($type, $node = NULL, $teaser = FALSE) {
 				),
 			);
 		}
-	
+		
+		// add link to CiviCRM Event Edit page
 		if (user_access('access CiviEvent')) {
 			$links['wpa_civievent_sync_civieditlink'] = array(
 				'title' => 'Configure CiviCRM Event',
-				'href' => 'civicrm/admin/event',
-				'query' => 'action=update&id='. $node->civi_eid .'&reset=1',
+				'href' => 'civicrm/event/manage/eventInfo',
+				'query' => 'reset=1&action=update&id='. $node->civi_eid,
 				'attributes' => array(
 					'title' => 'Edit the associated CiviCRM Event details'
 			),
 			);
 		}
-	
+		
+		// add registration link
+		// TODO check this is right...
 		if ($node->civi_registration && user_access('register for events')) {
 			$links['wpa_civievent_sync_civireglink'] = array(
 				'title' => 'Event registration',
@@ -620,14 +622,14 @@ function wpa_civievent_sync_insert( $node ) {
 		// construct link
 		$link = l(
 			'CiviCRM Event page', 
-			'civicrm/admin/event', 
+			'civicrm/event/manage/eventInfo', 
 			array(
-				'query' => 'action=update&reset=1&id='. $civi_event_id
+				'query' => 'reset=1&action=update&id='. $civi_event_id
 			)
 		);
 	
 		drupal_set_message(
-			'A corresponding CiviCRM Event has been created. Please visit the '. $link.' to complete the event configuration.'
+			'A corresponding CiviCRM Event has been created. If you need to, visit the '. $link.' to configure the event further.'
 		);
 		
 	}
@@ -923,8 +925,8 @@ function wpa_civievent_sync_update( $node ) {
 					'The corresponding CiviCRM Event has been updated. You can add further details to it on the '. 
 					l(
 						'CiviCRM Event page', 
-						'civicrm/admin/event', 
-						array('query' => 'action=update&reset=1&id='. $civi_event_id)
+						'civicrm/event/manage/eventInfo', 
+						array('query' => 'reset=1&action=update&id='. $civi_event_id)
 					)
 				);
 				
