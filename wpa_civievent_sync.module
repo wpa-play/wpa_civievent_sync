@@ -312,9 +312,8 @@ function wpa_civievent_sync_link($type, $node = NULL, $teaser = FALSE) {
 
 	// if node context AND there's a civi id loaded in the node object
 	if ( $type == 'node' && isset( $node->civi_eid ) ) {
-
-		//dsm($node->civi_id );
-
+		
+		// add link to CiviCRM Event page
 		if (user_access('access CiviEvent')) {
 			$links['wpa_civievent_sync_civilink'] = array(
 				'title' => 'CiviCRM Event page',
@@ -325,18 +324,21 @@ function wpa_civievent_sync_link($type, $node = NULL, $teaser = FALSE) {
 				),
 			);
 		}
-	
+		
+		// add link to CiviCRM Event Edit page
 		if (user_access('access CiviEvent')) {
 			$links['wpa_civievent_sync_civieditlink'] = array(
 				'title' => 'Configure CiviCRM Event',
-				'href' => 'civicrm/admin/event',
-				'query' => 'action=update&id='. $node->civi_eid .'&reset=1',
+				'href' => 'civicrm/event/manage/eventInfo',
+				'query' => 'reset=1&action=update&id='. $node->civi_eid,
 				'attributes' => array(
 					'title' => 'Edit the associated CiviCRM Event details'
 			),
 			);
 		}
-	
+		
+		// add registration link
+		// TODO check this is right...
 		if ($node->civi_registration && user_access('register for events')) {
 			$links['wpa_civievent_sync_civireglink'] = array(
 				'title' => 'Event registration',
@@ -583,8 +585,8 @@ function wpa_civievent_sync_insert( $node ) {
 	$params['end_date'] = $date_end;
 	
 	// set Civi event type according to taxo
-	$params['event_type_id'] = _wpa_civievent_sync_get_etid(
-		$node->taxonomy[_wpa_civievent_sync_get_vid()]
+	$params['event_type_id'] = _wpa_civievent_sync_get_event_type_id(
+		$node->taxonomy[_wpa_civievent_sync_get_vocab_id()]
 	);
 	
 	// use API to create event
@@ -620,14 +622,14 @@ function wpa_civievent_sync_insert( $node ) {
 		// construct link
 		$link = l(
 			'CiviCRM Event page', 
-			'civicrm/admin/event', 
+			'civicrm/event/manage/eventInfo', 
 			array(
-				'query' => 'action=update&reset=1&id='. $civi_event_id
+				'query' => 'reset=1&action=update&id='. $civi_event_id
 			)
 		);
 	
 		drupal_set_message(
-			'A corresponding CiviCRM Event has been created. Please visit the '. $link.' to complete the event configuration.'
+			'A corresponding CiviCRM Event has been created. If you need to, visit the '. $link.' to configure the event further.'
 		);
 		
 	}
@@ -650,9 +652,8 @@ function wpa_civievent_sync_update( $node ) {
 
 	} else {
 
-		// get the tied civi contact ID
-		$db_object = db_fetch_object(db_query('SELECT civi_eid FROM {wpa_civievent_sync} WHERE nid = %d', $node->nid));
-		$civi_event_id = $db_object->civi_eid;
+		// get the CiviEvent ID
+		$civi_event_id = _wpa_civievent_sync_get_civi_event_id( $node );
 		
 		// initialize CiviCRM and load API
 		civicrm_initialize(TRUE);
@@ -849,8 +850,8 @@ function wpa_civievent_sync_update( $node ) {
 		
 		
 		// set event type ID to that of current node
-		$params['event_type_id'] = _wpa_civievent_sync_get_etid(
-			$node->taxonomy[_wpa_civievent_sync_get_vid()]
+		$params['event_type_id'] = _wpa_civievent_sync_get_event_type_id(
+			$node->taxonomy[_wpa_civievent_sync_get_vocab_id()]
 		);
 
 		// add participant_role
@@ -924,8 +925,8 @@ function wpa_civievent_sync_update( $node ) {
 					'The corresponding CiviCRM Event has been updated. You can add further details to it on the '. 
 					l(
 						'CiviCRM Event page', 
-						'civicrm/admin/event', 
-						array('query' => 'action=update&reset=1&id='. $civi_event_id)
+						'civicrm/event/manage/eventInfo', 
+						array('query' => 'reset=1&action=update&id='. $civi_event_id)
 					)
 				);
 				
@@ -958,12 +959,12 @@ function wpa_civievent_sync_delete(&$node) {
  */
 function wpa_civievent_sync_load( $node ) {
 
-	// get the tied civi contact ID. CRUD: read
-	$additions = db_fetch_object(db_query('SELECT civi_eid FROM {wpa_civievent_sync} WHERE nid = %d', $node->nid));
-	
 	// initialized CiviCRM and load API
 	civicrm_initialize(TRUE);
 	require_once 'api/api.php';
+	
+	// get the CiviEvent ID
+	$additions = _wpa_civievent_sync_get_civi_event_id_object( $node );
 	
 	// get the event
 	$params = array( 
@@ -972,15 +973,15 @@ function wpa_civievent_sync_load( $node ) {
 	);
 	
 	// retrieve event with API call
-	$result = civicrm_api( 'event', 'get', $params );
+	$civi_event = civicrm_api( 'event', 'get', $params );
 	
 	// how did we do?
-	if ( civicrm_error( $result )) {
-		drupal_set_message($result['error_message'], 'error');
+	if ( $civi_event['is_error'] == '1' ) {
+		drupal_set_message($civi_event['error_message'], 'error');
 	}
 	
 	// add a registration property
-	$additions->civi_registration = $result['is_online_registration'];
+	$additions->civi_registration = $civi_event['is_online_registration'];
 	
 	// Drupal handles merging the data?
 	return $additions;
@@ -1012,7 +1013,7 @@ Taxonomy stuff
 /**
  * Returns the Event Type id associated to a taxo term id
  */
-function _wpa_civievent_sync_get_etid($tid) {
+function _wpa_civievent_sync_get_event_type_id($tid) {
 	
 	// the correspondences are stored in a site variable
 	$terms = variable_get('wpa_civievent_sync_terms', array());
@@ -1030,7 +1031,7 @@ function _wpa_civievent_sync_get_etid($tid) {
 /**
  * Returns (and possibly creates) a new vocabulary for Civi Events.
  */
-function _wpa_civievent_sync_get_vid() {
+function _wpa_civievent_sync_get_vocab_id() {
 	
 	// get existing
 	$vid = variable_get('wpa_civievent_sync_vocabulary', '');
@@ -1081,7 +1082,7 @@ function _wpa_civievent_sync_get_vid() {
 function _wpa_civievent_sync_customise_taxonomy_form( &$form, &$form_state, $form_id ) {
 	
 	// get our taxonomy vocab ID
-	$vid = _wpa_civievent_sync_get_vid();
+	$vid = _wpa_civievent_sync_get_vocab_id();
 	
 	// target the vocabulary form
 	if ( $form_id == 'taxonomy_form_vocabulary' ) {
@@ -1257,11 +1258,8 @@ function _wpa_civievent_sync_get_formatted_participant_roles() {
  */
 function _wpa_civievent_sync_get_event_locations( &$node ) {
 	
-	// initialize CiviCRM and load API
-	civicrm_initialize(TRUE);
-	require_once 'api/api.php';
-	
 	// since this cannot be done using the API, call CiviCRM direct...
+	require_once 'CRM/Event/BAO/Event.php';
 	require_once 'CRM/Core/BAO/Location.php';
 	
 	// get locations for all events
@@ -1273,12 +1271,12 @@ function _wpa_civievent_sync_get_event_locations( &$node ) {
 	// trace
 	//print_r( $locations ); die();
 	
-	// get the CiviEvent ID for this node
-	$additions = db_fetch_object(db_query('SELECT civi_eid FROM {wpa_civievent_sync} WHERE nid = %d', $node->nid));
+	// get the CiviEvent ID
+	$civi_event_id = _wpa_civievent_sync_get_civi_event_id( $node );
 	
 	// get the event
 	$params = array( 
-		'id' => $additions->civi_eid,
+		'id' => $civi_event_id,
 		'version' => 3
 	);
 	
@@ -1308,12 +1306,59 @@ function _wpa_civievent_sync_get_event_locations( &$node ) {
 
 
 /**
- * Adds empty item to beginning of array
+ * Get the CiviEvent ID for a Drupal node
+ */
+function _wpa_civievent_sync_get_civi_event_id( &$node ) {
+
+	// get the CiviEvent ID object
+	$db_object = _wpa_civievent_sync_get_civi_event_id_object( $node );
+	
+	// return ID as variable
+	return $db_object->civi_eid;
+
+}
+
+
+
+/**
+ * Get the CiviEvent ID for a Drupal node as object (sometimes we need the object
+ * instead of the value, see hook_load() for example)
+ *
+ * We could do this as an anonymous object instead, eg:
+ *
+ * $obj = (object) array( 'foo' => 'bar', 'property' => 'value' );
+ * echo $obj->foo; // prints 'bar'
+ * echo $obj->property; // prints 'value'
+ *
+ */
+function _wpa_civievent_sync_get_civi_event_id_object( &$node ) {
+
+	// return the CiviEvent ID object from our table
+	return db_fetch_object(
+		db_query(
+			'SELECT civi_eid FROM {wpa_civievent_sync} WHERE nid = %d', 
+			$node->nid
+		)
+	);
+	
+}
+
+
+
+/**
+ * Allows adding of empty item to beginning of array
  */
 function _array_unshift_assoc( &$arr, $key, $val ) {
-	$arr = array_reverse($arr, true); 
-	$arr[$key] = $val;
+	
+	// reverse, preserving keys
 	$arr = array_reverse($arr, true);
+	
+	// add to end
+	$arr[$key] = $val;
+	
+	// reverse again, preserving keys
+	$arr = array_reverse($arr, true);
+
 }
 
 
