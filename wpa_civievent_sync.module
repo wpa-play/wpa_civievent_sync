@@ -455,6 +455,11 @@ function wpa_civievent_sync_form( &$node ) {
 	
 	
 	
+	// let other modules add their stuff
+	module_invoke_all( 'wpa_civievent_sync_build_form', $form, $node );
+	
+	
+	
 	//print_r( $form ); die();
 
 	// --<
@@ -668,177 +673,14 @@ function wpa_civievent_sync_update( $node ) {
 		// retrieve with API
 		$old_event = civicrm_api( 'event', 'get', $tmp );
 
-		/*
-		$old_event looks like this, because the v3 API does what effectively amounts to a search:
-
-		Array
-		(
-			[is_error] => 0
-			[version] => 3
-			[count] => 1
-			[id] => 374
-			[values] => Array
-				(
-					[374] => Array
-						(
-							[id] => 374
-							[title] => Sync Test
-							[event_title] => Sync Test
-							[description] => <p>This is the body text, let's see how badly the sync dies!</p>
-							[event_description] => <p>This is the body text, let's see how badly the sync dies!</p>
-							[event_type_id] => 10
-							[is_public] => 1
-							[start_date] => 2012-10-26 12:00:00
-							[event_start_date] => 2012-10-26 12:00:00
-							[end_date] => 0000-00-00 00:00:00
-							[event_end_date] => 0000-00-00 00:00:00
-							[is_online_registration] => 0
-							[is_monetary] => 0
-							[contribution_type_id] => 0
-							[is_map] => 0
-							[is_active] => 1
-							[is_show_location] => 1
-							[default_role_id] => 1
-							[is_email_confirm] => 0
-							[is_pay_later] => 0
-							[is_multiple_registrations] => 0
-							[allow_same_participant_emails] => 0
-							[is_template] => 0
-							[created_id] => 1
-							[created_date] => 0000-00-00 00:00:00
-							[custom_58] => Array
-								(
-									[0] => Radstock
-								)
-		
-							[custom_58_-1] => Array
-								(
-									[0] => Radstock
-								)
-		
-						)
-		
-				)
-		
-		)
-		*/
-		
 		// prepopulate update with existing CiviEvent
 		$params = array_shift( $old_event['values'] ); // we don't want to erase any existing values
 		
-		// trace
+		// see what our CiviEvent looks like
 		//print_r( $params ); die();
 		
-		/*
-		Array
-		(
-			[id] => 374
-			[title] => Sync Test
-			[event_title] => Sync Test
-			[description] => <p>This is the body text, let's see how badly the sync dies!</p>
-			[event_description] => <p>This is the body text, let's see how badly the sync dies!</p>
-			[event_type_id] => 10
-			[is_public] => 1
-			[start_date] => 2012-10-26 12:00:00
-			[event_start_date] => 2012-10-26 12:00:00
-			[end_date] => 0000-00-00 00:00:00
-			[event_end_date] => 0000-00-00 00:00:00
-			[is_online_registration] => 0
-			[is_monetary] => 0
-			[contribution_type_id] => 0
-			[is_map] => 0
-			[is_active] => 1
-			[is_show_location] => 1
-			[default_role_id] => 1
-			[is_email_confirm] => 0
-			[is_pay_later] => 0
-			[is_multiple_registrations] => 0
-			[allow_same_participant_emails] => 0
-			[is_template] => 0
-			[created_id] => 1
-			[created_date] => 0000-00-00 00:00:00
-			[custom_58] => Array
-				(
-					[0] => Radstock
-				)
-		
-			[custom_58_-1] => Array
-				(
-					[0] => Radstock
-				)
-		
-		)
-		*/
-		
-
-
-		// trace
+		// see what our Drupal node looks like
 		//print_r( $node ); die();
-		
-		// let's see what our node looks like (irrelevant stuff removed)
-		/*
-		stdClass Object
-		(
-			[nid] => 256
-			[vid] => 488
-			[uid] => 1
-			[created] => 1349111074
-			[type] => wpa_civievent_sync
-			[changed] => 1349176076
-			[title] => Sync Test
-			[body] => <p>This is the body text, let's see how badly the sync dies!</p>
-			[format] => 1
-			[name] => admin
-			[date] => 2012-10-01 18:04:34 +0100
-			[status] => 1
-			[op] => Submit
-			[form_id] => wpa_civievent_sync_node_form
-			[comment] => 2
-			[path] => unseen-content/sync-test
-			[pid] => 1153
-			[pathauto_perform_alias] => 1
-			[old_alias] => unseen-content/sync-test
-			[taxonomy] => Array
-				(
-					[4] => 32
-				)
-		
-			[field_event_date] => Array
-				(
-					[0] => Array
-						(
-							[value] => 2012-10-26 11:00:00
-							[value2] => 2012-10-26 12:00:00
-							[timezone] => Europe/London
-							[offset] => 3600
-							[offset2] => 3600
-							[timezone_db] => UTC
-							[date_type] => datetime
-						)
-		
-				)
-		
-			[og_initial_groups] => Array
-				(
-					[22] => 22
-					[165] => 165
-				)
-		
-			[og_groups] => Array
-				(
-					[22] => 22
-					[165] => 165
-				)
-		
-			[teaser] => <p>This is the body text, let's see how badly the sync dies!</p>
-			[validated] => 1
-			[og_theme] => 
-			[is_new] => 
-			[timestamp] => 1349176076
-		)
-		*/
-		
-
 		
 		// first set version
 		$params['version'] = 3;
@@ -865,20 +707,8 @@ function wpa_civievent_sync_update( $node ) {
 		// process date into format accepted by CiviCRM API
 		$node_date = $node->{WPA_CIVIEVENT_SYNC_DATE_FIELD}[0];
 		
-		/*
-		$node->{WPA_CIVIEVENT_SYNC_DATE_FIELD}[0] looks like this:
-		
-		Array
-		(
-			[value] => 2012-10-26 11:00:00
-			[value2] => 2012-10-26 12:00:00
-			[timezone] => Europe/London
-			[offset] => 3600
-			[offset2] => 3600
-			[timezone_db] => UTC
-			[date_type] => datetime
-		)
-		*/
+		// see what our Drupal node date looks like
+		//print_r( $node_date ); die();
 		
 		// start
 		$date_start = _wpa_civievent_sync_get_formatted_date( 
