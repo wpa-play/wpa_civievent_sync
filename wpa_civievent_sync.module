@@ -1,64 +1,21 @@
-<?php
-// $Id$
+<?php /*
+===============================================================
+WPA CiviEvent Module
+===============================================================
+AUTHOR			: Christian Wach <needle@haystack.co.uk>
+LAST MODIFIED	: 04/10/2012
+---------------------------------------------------------------
+NOTES
+=====
 
-// WPA CiviEvent Sync module is based on:
-// Civi Event Node module <http://drupal.org/node/194628#comment-1219728>
+This module provides:
 
-/*
---------------------------------------------------------------------------------
-Provides CiviCRM Event content types per CiviCRM Event Type.
---------------------------------------------------------------------------------
+1) a Drupal `Event` Content Type that syncs with CiviCRM Events 
+2) a Drupal Taxonomy Vocabulary per CiviCRM Event Type
 
-Each node is tied to a CiviCRM Event record: creating a new node creates a matching event record.
-Updating the node updates the event record data.
-Admins get a link from the node to the Civi event record page.s
+See `docs/wpa_civievent_sync_docs.html` for module information.
 
-
-** SETUP **
-
-On installation, the module will automatically create a content type for all CiviCRM event types.
-You then need to create the date field and add it to all the content types:
-  1. Go to admin/content/types
-  2. For the 'civi-event' content type, add a field:
-     - type 'date'
-     - name 'event_date'
-     - required
-
-
-
-** USAGE **
-
-The use case is that all event types will require matching vocab terms.
-However, after creating a new Event Type, the associated Drupal vocabulary must be synchronized.
-Follow these instructions to add a new Event Type:
-  1. Add the Event Type in CiviCRM
-  2. Go to admin/content/wpa_civievent_sync in Drupal
-  3. Click 'Update vocabulary'
-  4. Follow the 'edit content type' link for the new types you created
-
-User permissions are provided for creating, editing own, and deleting own nodes.
-Note that deleting a node DOES NOT delete the CiviCRM record.
-
-
-
-** TECHNICAL DETAILS **
-
-This is a node type module: is defines a node type as follows:
-- machine name: wpa_civievent_sync
-- human name:   WPA CiviEvent Sync
-
-Each time a node of this type is created, a Civi Event record is also created.
-Because CCK lacks an API, the date field must be added manually by an admin.
-The field name is hardcoded as a constant into this module as 'event_date': redefine it if necessary.
-
-
-
-** TO DO **
-
-- use CiviCRM theming to warn the admin user NOT to edit the date on the CiviCRM side (because it won't sync back to drupal)
-
-
---------------------------------------------------------------------------------
+---------------------------------------------------------------
 */
 
 
@@ -258,8 +215,8 @@ function wpa_civievent_sync_categories_submit($form, &$form_state) {
 				'weight' => 0,
 				'parent' => array(0),
 			);
-
-			taxonomy_save_term($edit);
+			
+			taxonomy_save_term( $edit );
 
 			// add the tid to the array
 			$form_state['values']['terms'][$etid] = $edit['tid'];
@@ -311,7 +268,7 @@ function _wpa_civievent_sync_get_civicrm_event_types() {
 function wpa_civievent_sync_link($type, $node = NULL, $teaser = FALSE) {
 
 	// if node context AND there's a civi id loaded in the node object
-	if ( $type == 'node' && isset( $node->civi_eid ) ) {
+	if ( $type == 'node' AND isset( $node->civi_eid ) ) {
 		
 		// add link to CiviCRM Event page
 		if (user_access('access CiviEvent')) {
@@ -339,7 +296,7 @@ function wpa_civievent_sync_link($type, $node = NULL, $teaser = FALSE) {
 		
 		// add registration link
 		// TODO check this is right...
-		if ($node->civi_registration && user_access('register for events')) {
+		if ($node->civi_registration AND user_access('register for events')) {
 			$links['wpa_civievent_sync_civireglink'] = array(
 				'title' => 'Event registration',
 				'href' => 'civicrm/event/register',
@@ -366,15 +323,15 @@ function wpa_civievent_sync_link($type, $node = NULL, $teaser = FALSE) {
  *  access CiviEvent - create new events, view, edit and delete events (apparently)
  */
 function wpa_civievent_sync_perm() {
-
-  return array(
-  
-  	'create event content', 
-  	'edit own event content', 
-  	'edit event content'
-  	
-  );
-
+	
+	return array(
+	
+		'create event content', 
+		'edit own event content', 
+		'edit event content'
+	
+	);
+	
 }
 
 
@@ -384,18 +341,19 @@ function wpa_civievent_sync_perm() {
  */
 function wpa_civievent_sync_access($op, $node, $account) {
 
-	if ($op == 'create') {
+	if ( $op == 'create' ) {
 		return user_access('create event content', $account);
 	}
 	
-	if ($op == 'update' || $op == 'delete') {
+	if ( $op == 'update' OR $op == 'delete' ) {
 		if ( 
-			user_access('edit event content', $account) || 
-			($node->uid == $account->uid && user_access( 'edit own event content', $account ) )
+			user_access('edit event content', $account) OR 
+			($node->uid == $account->uid AND user_access( 'edit own event content', $account ) )
 		) {
 			return TRUE;
 		}
 	}
+	
 }
 
 
@@ -952,7 +910,7 @@ function _wpa_civievent_sync_customise_taxonomy_form( &$form, &$form_state, $for
 	}
 	
 	// prevent adding of terms to the event type vocabulary
-	if ( $form_id == 'taxonomy_form_term' && $form['vid']['#value'] == $vid && !isset($form['tid']) ) { 
+	if ( $form_id == 'taxonomy_form_term' AND $form['vid']['#value'] == $vid AND !isset($form['tid']) ) { 
 
 		// same form id for editing terms!
 		$form = array(); // just kill the form. Blunt and cruel.
@@ -975,7 +933,7 @@ function _wpa_civievent_sync_customise_taxonomy_form( &$form, &$form_state, $for
 	}
 	
 	// prevent deletion of terms
-	if ( $form_id == 'taxonomy_form_term' && $form['vid']['#value'] == $vid && isset($form['tid']) ) {
+	if ( $form_id == 'taxonomy_form_term' AND $form['vid']['#value'] == $vid AND isset($form['tid']) ) {
 
 		$form['help_wpa_civievent_sync_term_edit'] = array(
 			'#value' => t('This term belongs to the designated Civi Event vocabulary and cannot be deleted.'),
