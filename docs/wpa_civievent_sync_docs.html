@@ -68,7 +68,7 @@ The field name is hardcoded as a constant into this module as 'event_date': rede
 
 
 
-$node->{WPA_CIVIEVENT_SYNC_DATE_FIELD}[0] looks like this:
+A single Drupal date array, for example $node->{WPA_CIVIEVENT_SYNC_DATE_FIELD}[0], looks like this:
 
 Array
 (
@@ -80,6 +80,46 @@ Array
 	[timezone_db] => UTC
 	[date_type] => datetime
 )
+
+
+
+For multiple, repeating events, $node->{WPA_CIVIEVENT_SYNC_DATE_FIELD} looks like this:
+NOTE: the offset values are wrong. See http://drupal.org/node/1317586
+
+Array
+(
+    [0] => Array
+        (
+            [value] => 2012-09-01 16:15:00
+            [value2] => 2012-09-01 17:15:00
+            [offset] => 0
+            [offset2] => 0
+            [timezone] => Europe/London
+            [rrule] => RRULE:FREQ=DAILY;INTERVAL=4;UNTIL=20130112T235959Z;WKST=MO
+
+EXDATE:20121108T000000Z
+            [timezone_db] => UTC
+            [date_type] => datetime
+        )
+
+    [1] => Array
+        (
+            [value] => 2012-09-05 16:15:00
+            [value2] => 2012-09-05 17:15:00
+            [offset] => 0
+            [offset2] => 0
+            [timezone] => Europe/London
+            [rrule] => RRULE:FREQ=DAILY;INTERVAL=4;UNTIL=20130112T235959Z;WKST=MO
+
+EXDATE:20121108T000000Z
+            [timezone_db] => UTC
+            [date_type] => datetime
+        )
+)
+
+
+
+--------------------------------------------------------------------------------
 
 
 
