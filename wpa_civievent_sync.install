@@ -33,28 +33,43 @@ function wpa_civievent_sync_install() {
 function wpa_civievent_sync_schema() {
 
 	$schema['wpa_civievent_sync'] = array(
-
+		
 		'description' => t('Associates Drupal Nodes with CiviCRM Events'),
-
+		
 		'fields' => array(
-
+			
+			// auto increment
+			'neid' => array(
+				'description' => t('Node Event ID'),
+				'type' => 'serial',
+				'unsigned' => TRUE,
+				'not null' => TRUE,
+			),
+			
+			// node
 			'nid' => array(
 				'description' => t('Node'),
 				'type' => 'int',
 				'unsigned' => TRUE,
-				'not null' => TRUE
+				'not null' => TRUE,
 			),
-
+			
+			// event
 			'civi_eid' => array(
 				'description' => t('Event'),
 				'type' => 'int',
 				'unsigned' => TRUE,
-				'not null' => TRUE
+				'not null' => TRUE,
 			),
-
+			
 		),
-
-		'primary key' => array('nid'),
+		
+		'indexes' => array(
+			'node_civieventid' => array('nid', 'civi_eid'),
+		),
+		
+		'primary key' => array('neid'),
+		
 	);
 
 	return $schema;

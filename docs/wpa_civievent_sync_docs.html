@@ -1,0 +1,298 @@
+<?php /*
+--------------------------------------------------------------------------------
+Provides CiviCRM Event content types per CiviCRM Event Type.
+--------------------------------------------------------------------------------
+
+
+
+** CREDITS **
+
+WPA CiviEvent Sync module is based on:
+Civi Event Node module <http://drupal.org/node/194628#comment-1219728>
+
+
+
+** GENERAL **
+
+Each node is tied to a CiviCRM Event record: creating a new node creates a matching event record.
+Updating the node updates the event record data.
+Admins get a link from the node to the Civi event record page.s
+
+
+
+** SETUP **
+
+On installation, the module will automatically create a content type for all CiviCRM event types.
+You then need to create the date field and add it to all the content types:
+  1. Go to admin/content/types
+  2. For the 'civi-event' content type, add a field:
+     - type 'date'
+     - name 'event_date'
+     - required
+
+
+
+** USAGE **
+
+The use case is that all event types will require matching vocab terms.
+However, after creating a new Event Type, the associated Drupal vocabulary must be synchronized.
+Follow these instructions to add a new Event Type:
+  1. Add the Event Type in CiviCRM
+  2. Go to admin/content/wpa_civievent_sync in Drupal
+  3. Click 'Update vocabulary'
+  4. Follow the 'edit content type' link for the new types you created
+
+User permissions are provided for creating, editing own, and deleting own nodes.
+Note that deleting a node DOES NOT delete the CiviCRM record.
+
+
+
+** TECHNICAL DETAILS **
+
+This is a node type module: is defines a node type as follows:
+- machine name: wpa_civievent_sync
+- human name:   WPA CiviEvent Sync
+
+Each time a node of this type is created, a Civi Event record is also created.
+Because CCK lacks an API, the date field must be added manually by an admin.
+The field name is hardcoded as a constant into this module as 'event_date': redefine it if necessary.
+
+
+
+** TO DO **
+
+- use CiviCRM theming to warn the admin user NOT to edit the date on the CiviCRM side (because it won't sync back to drupal)
+
+
+--------------------------------------------------------------------------------
+
+
+
+A single Drupal date array, for example $node->{WPA_CIVIEVENT_SYNC_DATE_FIELD}[0], looks like this:
+
+Array
+(
+	[value] => 2012-10-26 11:00:00
+	[value2] => 2012-10-26 12:00:00
+	[timezone] => Europe/London
+	[offset] => 3600
+	[offset2] => 3600
+	[timezone_db] => UTC
+	[date_type] => datetime
+)
+
+
+
+--------------------------------------------------------------------------------
+
+
+
+For multiple, repeating events, $node->{WPA_CIVIEVENT_SYNC_DATE_FIELD} looks like this:
+NOTE: the offset values are wrong. See http://drupal.org/node/1317586
+
+Array
+(
+    [0] => Array
+        (
+            [value] => 2012-09-01 16:15:00
+            [value2] => 2012-09-01 17:15:00
+            [offset] => 0
+            [offset2] => 0
+            [timezone] => Europe/London
+            [rrule] => RRULE:FREQ=DAILY;INTERVAL=4;UNTIL=20130112T235959Z;WKST=MO
+
+EXDATE:20121108T000000Z
+            [timezone_db] => UTC
+            [date_type] => datetime
+        )
+
+    [1] => Array
+        (
+            [value] => 2012-09-05 16:15:00
+            [value2] => 2012-09-05 17:15:00
+            [offset] => 0
+            [offset2] => 0
+            [timezone] => Europe/London
+            [rrule] => RRULE:FREQ=DAILY;INTERVAL=4;UNTIL=20130112T235959Z;WKST=MO
+
+EXDATE:20121108T000000Z
+            [timezone_db] => UTC
+            [date_type] => datetime
+        )
+)
+
+
+
+--------------------------------------------------------------------------------
+
+
+
+$old_event looks like this, because the v3 API does what effectively amounts to a search:
+
+Array
+(
+	[is_error] => 0
+	[version] => 3
+	[count] => 1
+	[id] => 374
+	[values] => Array
+		(
+			[374] => Array
+				(
+					[id] => 374
+					[title] => Sync Test
+					[event_title] => Sync Test
+					[description] => <p>This is the body text, let's see how badly the sync dies!</p>
+					[event_description] => <p>This is the body text, let's see how badly the sync dies!</p>
+					[event_type_id] => 10
+					[is_public] => 1
+					[start_date] => 2012-10-26 12:00:00
+					[event_start_date] => 2012-10-26 12:00:00
+					[end_date] => 0000-00-00 00:00:00
+					[event_end_date] => 0000-00-00 00:00:00
+					[is_online_registration] => 0
+					[is_monetary] => 0
+					[contribution_type_id] => 0
+					[is_map] => 0
+					[is_active] => 1
+					[is_show_location] => 1
+					[default_role_id] => 1
+					[is_email_confirm] => 0
+					[is_pay_later] => 0
+					[is_multiple_registrations] => 0
+					[allow_same_participant_emails] => 0
+					[is_template] => 0
+					[created_id] => 1
+					[created_date] => 0000-00-00 00:00:00
+					[custom_58] => Array
+						(
+							[0] => Radstock
+						)
+
+					[custom_58_-1] => Array
+						(
+							[0] => Radstock
+						)
+
+				)
+
+		)
+
+)
+
+
+
+--------------------------------------------------------------------------------
+
+
+
+let's see what our node looks like (irrelevant stuff removed)
+
+stdClass Object
+(
+	[nid] => 256
+	[vid] => 488
+	[uid] => 1
+	[created] => 1349111074
+	[type] => wpa_civievent_sync
+	[changed] => 1349176076
+	[title] => Sync Test
+	[body] => <p>This is the body text, let's see how badly the sync dies!</p>
+	[format] => 1
+	[name] => admin
+	[date] => 2012-10-01 18:04:34 +0100
+	[status] => 1
+	[op] => Submit
+	[form_id] => wpa_civievent_sync_node_form
+	[comment] => 2
+	[path] => unseen-content/sync-test
+	[pid] => 1153
+	[pathauto_perform_alias] => 1
+	[old_alias] => unseen-content/sync-test
+	[taxonomy] => Array
+		(
+			[4] => 32
+		)
+
+	[field_event_date] => Array
+		(
+			[0] => Array
+				(
+					[value] => 2012-10-26 11:00:00
+					[value2] => 2012-10-26 12:00:00
+					[timezone] => Europe/London
+					[offset] => 3600
+					[offset2] => 3600
+					[timezone_db] => UTC
+					[date_type] => datetime
+				)
+
+		)
+
+	[og_initial_groups] => Array
+		(
+			[22] => 22
+			[165] => 165
+		)
+
+	[og_groups] => Array
+		(
+			[22] => 22
+			[165] => 165
+		)
+
+	[teaser] => <p>This is the body text, let's see how badly the sync dies!</p>
+	[validated] => 1
+	[og_theme] => 
+	[is_new] => 
+	[timestamp] => 1349176076
+)
+
+
+
+--------------------------------------------------------------------------------
+
+
+
+Notes removed from wpa_civievent_sync_update().
+
+Let's first delete any CiviEvents for dates that no longer exist. The problem 
+here is that the updated dates may not match the existing CiviEvents at all... 
+
+So, lets think through some scenarios:
+
+When we first created the node:
+node_date( 1/10/2012 10:00 ) -> civi_eid ( 255 )
+node_date( 2/10/2012 10:00 ) -> civi_eid ( 256 )
+node_date( 3/10/2012 10:00 ) -> civi_eid ( 257 )
+--> Each CiviEvent is created in turn and has the corresponding date
+
+On updating the node, we change the time:
+node_date( 1/10/2012 11:00 ) -> civi_eid ( 255 )
+node_date( 2/10/2012 11:00 ) -> civi_eid ( 256 )
+node_date( 3/10/2012 11:00 ) -> civi_eid ( 257 )
+--> Simple, just update all
+
+On updating the node, we remove a date:
+node_date( 1/10/2012 10:00 ) -> civi_eid ( 255 )
+node_date( 3/10/2012 10:00 ) -> civi_eid ( 257 )
+--> Simple, delete the CiviEvent that has that date
+
+On updating the node, we remove a date AND change the time:
+node_date( 1/10/2012 11:00 ) -> civi_eid ( 255 )
+node_date( 3/10/2012 11:00 ) -> civi_eid ( 257 )
+--> There's no way to match the node_date with the CiviEvent
+==> All we can do is loop through the list and update in sequence?
+
+On updating the node, we change the frequency AND the time:
+node_date( 1/10/2012 11:00 ) -> civi_eid ( 255 )
+node_date( 3/10/2012 11:00 ) -> civi_eid ( 256 )
+node_date( 5/10/2012 11:00 ) -> civi_eid ( 257 )
+--> There's no way to match the node_date with the CiviEvent
+==> All we can do is loop through the list and update in sequence?
+
+*/
+
+
+
+
