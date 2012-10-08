@@ -83,6 +83,10 @@ Array
 
 
 
+--------------------------------------------------------------------------------
+
+
+
 For multiple, repeating events, $node->{WPA_CIVIEVENT_SYNC_DATE_FIELD} looks like this:
 NOTE: the offset values are wrong. See http://drupal.org/node/1317586
 
@@ -178,6 +182,10 @@ Array
 
 
 
+--------------------------------------------------------------------------------
+
+
+
 let's see what our node looks like (irrelevant stuff removed)
 
 stdClass Object
@@ -239,9 +247,52 @@ stdClass Object
 	[is_new] => 
 	[timestamp] => 1349176076
 )
+
+
+
+--------------------------------------------------------------------------------
+
+
+
+Notes removed from wpa_civievent_sync_update().
+
+Let's first delete any CiviEvents for dates that no longer exist. The problem 
+here is that the updated dates may not match the existing CiviEvents at all... 
+
+So, lets think through some scenarios:
+
+When we first created the node:
+node_date( 1/10/2012 10:00 ) -> civi_eid ( 255 )
+node_date( 2/10/2012 10:00 ) -> civi_eid ( 256 )
+node_date( 3/10/2012 10:00 ) -> civi_eid ( 257 )
+--> Each CiviEvent is created in turn and has the corresponding date
+
+On updating the node, we change the time:
+node_date( 1/10/2012 11:00 ) -> civi_eid ( 255 )
+node_date( 2/10/2012 11:00 ) -> civi_eid ( 256 )
+node_date( 3/10/2012 11:00 ) -> civi_eid ( 257 )
+--> Simple, just update all
+
+On updating the node, we remove a date:
+node_date( 1/10/2012 10:00 ) -> civi_eid ( 255 )
+node_date( 3/10/2012 10:00 ) -> civi_eid ( 257 )
+--> Simple, delete the CiviEvent that has that date
+
+On updating the node, we remove a date AND change the time:
+node_date( 1/10/2012 11:00 ) -> civi_eid ( 255 )
+node_date( 3/10/2012 11:00 ) -> civi_eid ( 257 )
+--> There's no way to match the node_date with the CiviEvent
+==> All we can do is loop through the list and update in sequence?
+
+On updating the node, we change the frequency AND the time:
+node_date( 1/10/2012 11:00 ) -> civi_eid ( 255 )
+node_date( 3/10/2012 11:00 ) -> civi_eid ( 256 )
+node_date( 5/10/2012 11:00 ) -> civi_eid ( 257 )
+--> There's no way to match the node_date with the CiviEvent
+==> All we can do is loop through the list and update in sequence?
+
 */
 
 
 
 
-?>
