@@ -471,6 +471,8 @@ function wpa_civievent_sync_form_submit( &$form, &$form_state ) {
 	$form['#node']->participant_role = $form['#post']['participant_role'];
 	$form['#node']->is_online_registration = $form['#post']['is_online_registration'];
 	
+	//print_r( $form['#node'] ); die();
+
 }
 
 
@@ -655,12 +657,19 @@ function wpa_civievent_sync_update( $node ) {
 /**
  * Implementation of hook_delete().
  */
-/*
 function wpa_civievent_sync_delete(&$node) {
-  // CRUD: delete
-  // not implemented yet...
+
+	// initialise CiviCRM and load API
+	civicrm_initialize(TRUE);
+	require_once 'api/api.php';
+	
+	// get dates for this node
+	$node_dates = $node->{WPA_CIVIEVENT_SYNC_DATE_FIELD};
+	
+	// delete the lot...
+	_wpa_civievent_sync_delete_civi_events( $node, $node_dates );
+	
 }
-*/
 
 
 
@@ -1299,7 +1308,7 @@ function _wpa_civievent_sync_get_formatted_participant_roles( &$node ) {
 		'#options' => $opts,
 		'#multiple' => 0,
 		'#size' => 0,
-		'#weight' => 5,
+		'#weight' => 6,
 		'#required' => 1,
 	);
 	
@@ -1335,7 +1344,7 @@ function _wpa_civievent_sync_get_registration( &$node ) {
 		'#type' => 'select',
 		'#title' => check_plain('Online Event Registration'),
 		'#description' => 'Choose whether or not the events will allow online registration. <em>WARNING</em> changing this will set the event registration for <em>all events</em>.',
-		'#default_value' => $civi_event['is_online_registration'],
+		'#default_value' => $default,
 		'#options' => array(
 		
 			'' => 'No',
@@ -1344,7 +1353,7 @@ function _wpa_civievent_sync_get_registration( &$node ) {
 		),
 		'#multiple' => 0,
 		'#size' => 0,
-		'#weight' => 5,
+		'#weight' => 6,
 		'#required' => 0,
 	);
 	
