@@ -241,9 +241,12 @@ function wpa_civievent_sync_categories_submit($form, &$form_state) {
 /*
  * Implementation of hook_link()
  * adds some links to the Civi contact page for users with sufficient access privileges
- * NOTE: this will probably move, because there are far too many links. Useful for testing, though
+ * WARNING: this has moved into the node because there are far too many links
  */
 function wpa_civievent_sync_link( $type, $node = NULL, $teaser = FALSE ) {
+
+	// disable
+	return;
 
 	// if node context AND there's are civi_events loaded in the node object
 	if ( $type == 'node' AND isset( $node->civi_events ) ) {
@@ -293,10 +296,6 @@ function wpa_civievent_sync_link( $type, $node = NULL, $teaser = FALSE ) {
 		}
 		
 		// add registration link
-		// TODO check this is right...
-		// TODO move this to the node template and print a list of reg links below content
-		//print_r( array( 'reg' => $node->civi_registration ) ); die();
-		/*
 		if ($node->civi_registration AND user_access('register for events')) {
 		
 			$links['wpa_civievent_sync_civireglink'] = array(
@@ -309,11 +308,10 @@ function wpa_civievent_sync_link( $type, $node = NULL, $teaser = FALSE ) {
 			);
 			
 		}
-		*/
 		
 		// --<
 		return $links;
-
+		
 	}
 
 }
@@ -822,17 +820,134 @@ function wpa_civievent_sync_load( $node ) {
 
 
 
-/*
-function civicrm_multiday_event_participants_link($node) {
-  drupal_goto('civicrm/event/search', array('query'=>array(
-  'reset'=>'1',
-  'force'=>'1',
-  'status'=>'true',
-  'event'=>$node->field_civievent_id[LANGUAGE_NONE][0]['value'],
-  'destination'=> 'node/' . $node->nid
-  )));
-}
+/**
+* Override or insert variables into the node templates.
+*
+* @param $vars
+*   An array of variables to pass to the theme template.
+* @param $hook
+*   The name of the template being rendered ("node" in this case.)
 */
+function wpa_civievent_sync_preprocess_node(&$vars, $hook) {
+	
+	// get node
+	//print_r( $vars['node'] ); die();
+	$node = $vars['node'];
+	
+	// if we're showing a node of our custom type in full mode
+	if ( $node->type == 'wpa_civievent_sync' AND !$node->teaser ) {
+	
+		// build list of dates with registration links
+		_wpa_civievent_sync_build_event_list( &$vars, $node->civi_events );
+	
+	}
+	
+	
+}
+
+
+
+/**
+* Build list of dates with registration and edit links
+*/
+function _wpa_civievent_sync_build_event_list( &$vars, $events ) {
+	
+	//print_r( $events ); die();
+	
+	// init
+	$_html = '';
+	
+	// if we have civi events...
+	if ( count( $events ) > 0 ) {
+		
+		// init list
+		$event_list = array();
+		
+		// make the dates a list
+		foreach( $events AS $event ) {
+			
+			// init item
+			$_item = '';
+			
+			// get dates (no offset, as CiviCRM doesn't use it)
+			$_start = _wpa_civievent_sync_get_timestamp( $event['start_date'], 0 );
+			$_end = _wpa_civievent_sync_get_timestamp( $event['end_date'], 0 );
+			
+			// format dates
+			$_start_html = date( 'M j, Y, g:i a', $_start );
+			
+			// check if end is on same day
+			if ( date( 'M j, Y', $_start ) == date( 'M j, Y', $_end ) ) {
+				// check if end is on same am/pm
+				if ( date( 'a', $_start ) == date( 'a', $_end ) ) {
+					$_start_html = date( 'M j, Y, g:i', $_start );
+					$_end_html = date( 'g:i a', $_end );
+				} else {
+					$_end_html = date( 'g:i a', $_end );
+				}
+			} else {
+				$_end_html = date( 'M j, Y, g:i a', $_end );
+			}
+			
+			// add date
+			$_item .= $_start_html.'&mdash;'.$_end_html;
+		
+			// does the event allow registration, and can the user access it?
+			if ( $event['is_online_registration'] == 1 AND user_access('register for events') ) {
+				
+				// yes, add to list
+				$_item .= ' &rarr; '.l(
+					'Register', 
+					'civicrm/event/register', 
+					array(
+						'query' => 'reset=1&id='. $civi_event_id
+					)
+				);
+				
+			}
+			
+			// add link to CiviCRM Event and Event Edit pages
+			if (user_access('access CiviEvent')) {
+			
+				// add page link
+				$_item .= ' &rarr; CiviCRM: '.l(
+					'View', 
+					'civicrm/event/info', 
+					array(
+						'query' => 'reset=1&id='. $civi_event_id,
+						'target' => '_blank',
+					)
+				);
+
+				// add edit link
+				$_item .= ', '.l(
+					'Edit', 
+					'civicrm/event/manage/eventInfo', 
+					array(
+						'query' => 'reset=1&action=update&id='. $civi_event_id,
+						'target' => '_blank',
+					)
+				);
+
+			}
+				
+			// add to list
+			$event_list[] = '<li>'.$_item.'</li>';
+
+		}
+		
+		// convert to list
+		$_html .= '<ul class="civi_event_list">'."\n";
+		$_html .= implode( "\n", $event_list );
+		$_html .= '</ul>'."\n\n";
+		//print_r( $_html ); die();
+	
+	}
+
+	// add to node as var
+	$vars['civi_event_list'] = $_html;		
+
+}
 
 
 
@@ -1218,7 +1333,7 @@ function _wpa_civievent_sync_update_civi_events( &$node, $node_dates, $civi_even
 			
 			// feedback
 			drupal_set_message(
-				'The following CiviCRM Events have been created. '.
+				'The following CiviCRM Events have been updated. '.
 				'If you need to, visit the following links to configure the events further:<br/>'.$link_list
 			);
 			
