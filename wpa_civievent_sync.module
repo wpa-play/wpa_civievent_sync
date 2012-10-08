@@ -1,62 +1,19 @@
-<?php
-// $Id$
-
-// WPA CiviEvent Sync module is based on:
-// Civi Event Node module <http://drupal.org/node/194628#comment-1219728>
-
-/*
+<?php /*
+================================================================================
+WPA CiviEvent Module
+================================================================================
+AUTHOR			: Christian Wach <needle@haystack.co.uk>
+LAST MODIFIED	: 04/10/2012
 --------------------------------------------------------------------------------
-Provides CiviCRM Event content types per CiviCRM Event Type.
---------------------------------------------------------------------------------
+NOTES
+=====
 
-Each node is tied to a CiviCRM Event record: creating a new node creates a matching event record.
-Updating the node updates the event record data.
-Admins get a link from the node to the Civi event record page.s
+This module provides:
 
+1) a Drupal `Event` Content Type that syncs with CiviCRM Events 
+2) a Drupal Taxonomy Vocabulary per CiviCRM Event Type
 
-** SETUP **
-
-On installation, the module will automatically create a content type for all CiviCRM event types.
-You then need to create the date field and add it to all the content types:
-  1. Go to admin/content/types
-  2. For the 'civi-event' content type, add a field:
-     - type 'date'
-     - name 'event_date'
-     - required
-
-
-
-** USAGE **
-
-The use case is that all event types will require matching vocab terms.
-However, after creating a new Event Type, the associated Drupal vocabulary must be synchronized.
-Follow these instructions to add a new Event Type:
-  1. Add the Event Type in CiviCRM
-  2. Go to admin/content/wpa_civievent_sync in Drupal
-  3. Click 'Update vocabulary'
-  4. Follow the 'edit content type' link for the new types you created
-
-User permissions are provided for creating, editing own, and deleting own nodes.
-Note that deleting a node DOES NOT delete the CiviCRM record.
-
-
-
-** TECHNICAL DETAILS **
-
-This is a node type module: is defines a node type as follows:
-- machine name: wpa_civievent_sync
-- human name:   WPA CiviEvent Sync
-
-Each time a node of this type is created, a Civi Event record is also created.
-Because CCK lacks an API, the date field must be added manually by an admin.
-The field name is hardcoded as a constant into this module as 'event_date': redefine it if necessary.
-
-
-
-** TO DO **
-
-- use CiviCRM theming to warn the admin user NOT to edit the date on the CiviCRM side (because it won't sync back to drupal)
-
+See `docs/wpa_civievent_sync_docs.html` for module information.
 
 --------------------------------------------------------------------------------
 */
@@ -245,12 +202,14 @@ function theme_wpa_civievent_sync_categories($form) {
  * Create any missing terms for new event types, then store the relationship array
  */
 function wpa_civievent_sync_categories_submit($form, &$form_state) {
-
+	
+	// loop through terms
 	foreach ($form_state['values']['terms'] as $etid => $tid) {
+		
+		// do we have it?
+		if ( !isset( $tid ) ) {
 
-		if (!isset($tid)) {
-
-			// no term: create one
+			// no: create one
 			$edit = array(
 				'name' => $form_state['values']['types'][$etid],
 				'description' => '',
@@ -258,8 +217,9 @@ function wpa_civievent_sync_categories_submit($form, &$form_state) {
 				'weight' => 0,
 				'parent' => array(0),
 			);
-
-			taxonomy_save_term($edit);
+			
+			// save it
+			taxonomy_save_term( $edit );
 
 			// add the tid to the array
 			$form_state['values']['terms'][$etid] = $edit['tid'];
@@ -267,38 +227,12 @@ function wpa_civievent_sync_categories_submit($form, &$form_state) {
 		}
 
 	}
-
+	
+	// store for our module's use
 	variable_set('wpa_civievent_sync_terms', $form_state['values']['terms']);
+	
+	// feedback
 	drupal_set_message('The vocabulary has been synchronized.');
-
-}
-
-
-
-/*
- * Helper function to make only one call to CiviCRM API for event types list
- * Returns keyed array:
- *   [event type id] => event name
- */
-function _wpa_civievent_sync_get_civicrm_event_types() {
-	
-	// init
-	static $wpa_civievent_sync_types;
-	
-	// do we have it?
-	if ( !isset( $wpa_civievent_sync_types ) ) {
-		
-		// no, let's get it
-		civicrm_initialize(TRUE);
-
-		// TODO: make more stable by using CiviCRM API
-		require_once 'CRM/Core/OptionGroup.php';
-		$wpa_civievent_sync_types = CRM_Core_OptionGroup::values('event_type');
-
-	}
-	
-	// --<
-	return $wpa_civievent_sync_types;
 
 }
 
@@ -307,39 +241,63 @@ function _wpa_civievent_sync_get_civicrm_event_types() {
 /*
  * Implementation of hook_link()
  * adds some links to the Civi contact page for users with sufficient access privileges
+ * WARNING: this has moved into the node because there are far too many links
  */
-function wpa_civievent_sync_link($type, $node = NULL, $teaser = FALSE) {
+function wpa_civievent_sync_link( $type, $node = NULL, $teaser = FALSE ) {
 
-	// if node context AND there's a civi id loaded in the node object
-	if ( $type == 'node' && isset( $node->civi_eid ) ) {
+	// disable
+	return;
+
+	// if node context AND there's are civi_events loaded in the node object
+	if ( $type == 'node' AND isset( $node->civi_events ) ) {
 		
-		// add link to CiviCRM Event page
+		// add link to CiviCRM Event and Event Edit pages
 		if (user_access('access CiviEvent')) {
-			$links['wpa_civievent_sync_civilink'] = array(
-				'title' => 'CiviCRM Event page',
-				'href' => 'civicrm/event/info',
-				'query' => 'reset=1&id='. $node->civi_eid,
-				'attributes' => array(
-					'title' => 'Open the associated CiviCRM Event page'
-				),
-			);
-		}
 		
-		// add link to CiviCRM Event Edit page
-		if (user_access('access CiviEvent')) {
-			$links['wpa_civievent_sync_civieditlink'] = array(
-				'title' => 'Configure CiviCRM Event',
-				'href' => 'civicrm/event/manage/eventInfo',
-				'query' => 'reset=1&action=update&id='. $node->civi_eid,
-				'attributes' => array(
-					'title' => 'Edit the associated CiviCRM Event details'
-			),
-			);
+			// init counter
+			$count = 1;
+		
+			// loop through events
+			foreach( $node->civi_events AS $event ) {
+				
+				// make date readable
+				$human_date = date( 
+					'M j, Y, g:i a',
+					_wpa_civievent_sync_get_timestamp( $event['start_date'], 0 )
+				);
+				
+				// add page link
+				$links['wpa_civievent_sync_civilink_'.$count] = array(
+					'title' => 'CiviCRM Event ('.$human_date.')',
+					'href' => 'civicrm/event/info',
+					'query' => 'reset=1&id='. $event['id'],
+					'attributes' => array(
+						'title' => 'Open the CiviCRM Event page',
+						'target' => '_blank',
+					),
+				);
+				
+				// add edit link
+				$links['wpa_civievent_sync_civieditlink_'.$count] = array(
+					'title' => 'Configure CiviCRM Event ('.$human_date.')',
+					'href' => 'civicrm/event/manage/eventInfo',
+					'query' => 'reset=1&action=update&id='. $event['id'],
+					'attributes' => array(
+						'title' => 'Edit the associated CiviCRM Event details',
+						'target' => '_blank',
+					),
+				);
+				
+				// increment
+				$count++;
+				
+			}
+		
 		}
 		
 		// add registration link
-		// TODO check this is right...
-		if ($node->civi_registration && user_access('register for events')) {
+		if ($node->civi_registration AND user_access('register for events')) {
+		
 			$links['wpa_civievent_sync_civireglink'] = array(
 				'title' => 'Event registration',
 				'href' => 'civicrm/event/register',
@@ -348,10 +306,12 @@ function wpa_civievent_sync_link($type, $node = NULL, $teaser = FALSE) {
 					'title' => 'Sign up for this event'
 				),
 			);
+			
 		}
-	
+		
+		// --<
 		return $links;
-
+		
 	}
 
 }
@@ -366,15 +326,15 @@ function wpa_civievent_sync_link($type, $node = NULL, $teaser = FALSE) {
  *  access CiviEvent - create new events, view, edit and delete events (apparently)
  */
 function wpa_civievent_sync_perm() {
-
-  return array(
-  
-  	'create event content', 
-  	'edit own event content', 
-  	'edit event content'
-  	
-  );
-
+	
+	return array(
+	
+		'create event content', 
+		'edit own event content', 
+		'edit event content'
+	
+	);
+	
 }
 
 
@@ -384,18 +344,19 @@ function wpa_civievent_sync_perm() {
  */
 function wpa_civievent_sync_access($op, $node, $account) {
 
-	if ($op == 'create') {
+	if ( $op == 'create' ) {
 		return user_access('create event content', $account);
 	}
 	
-	if ($op == 'update' || $op == 'delete') {
+	if ( $op == 'update' OR $op == 'delete' ) {
 		if ( 
-			user_access('edit event content', $account) || 
-			($node->uid == $account->uid && user_access( 'edit own event content', $account ) )
+			user_access('edit event content', $account) OR 
+			($node->uid == $account->uid AND user_access( 'edit own event content', $account ) )
 		) {
 			return TRUE;
 		}
 	}
+	
 }
 
 
@@ -443,15 +404,23 @@ function wpa_civievent_sync_form( &$node ) {
 	// CiviCRM
 	// ----------------
 	
-	// initialize CiviCRM and load API
+	// initialise CiviCRM and load API
 	civicrm_initialize(TRUE);
 	require_once 'api/api.php';
 	
 	// add participant_role
-	$form['participant_role'] = _wpa_civievent_sync_get_formatted_participant_roles();
+	$form['participant_role'] = _wpa_civievent_sync_get_formatted_participant_roles( $node );
+	
+	// add registration
+	$form['is_online_registration'] = _wpa_civievent_sync_get_registration( $node );
 	
 	// add location
 	$form['loc_block_id'] = _wpa_civievent_sync_get_event_locations( $node );
+	
+	
+	
+	// let other modules add their stuff
+	module_invoke_all( 'wpa_civievent_sync_build_form', $form, $node );
 	
 	
 	
@@ -484,10 +453,9 @@ function wpa_civievent_sync_form_alter( &$form, &$form_state, $form_id ) {
 		
 	}
 	
-	//print_r( $form_id ); die();
+	//print_r( $form ); die();
 	
 }
-
 
 
 
@@ -501,9 +469,11 @@ function wpa_civievent_sync_form_submit( &$form, &$form_state ) {
 	// store values in node object so they will be available in hook_insert and hook_update
 	$form['#node']->loc_block_id = $form['#post']['loc_block_id'];
 	$form['#node']->participant_role = $form['#post']['participant_role'];
+	$form['#node']->is_online_registration = $form['#post']['is_online_registration'];
 	
-}
+	//print_r( $form['#node'] ); die();
 
+}
 
 
 
@@ -518,423 +488,167 @@ function wpa_civievent_sync_validate($node, &$form) {
 
 
 
+
+
+
+/*
+--------------------------------------------------------------------------------
+Sync from CiviCRM to Drupal
+--------------------------------------------------------------------------------
+*/
+
+/*
+ * Implementation of hook_civicrm_post().
+ */
+function wpa_civievent_sync_civicrm_post( $op, $objectName, $objectId, &$objectRef ) {
+	
+	/*
+	print_r( array(
+	
+		'op' => $op,
+		'objectName' => $objectName,
+		'objectId' => $objectId,
+		'objectRef' => $objectRef,
+	
+	) ); die();
+	*/
+	
+	// trap new event
+	if ($op == 'create' && $objectName == 'Event') {
+	
+	}
+
+}
+
+
+
+
+
+
+/*
+--------------------------------------------------------------------------------
+Sync from Drupal to CiviCRM
+--------------------------------------------------------------------------------
+*/
+
 /**
  * Implementation of hook_insert().
- * As a new node is being inserted into the database, we need to do our own CiviCRM database inserts.
+ * WARNING: since we're implementing Date Repeat functionality, this could be very resource intensive
  */
 function wpa_civievent_sync_insert( $node ) {
 
-	// initialize CiviCRM and load API
+	// initialise CiviCRM and load API
 	civicrm_initialize(TRUE);
 	require_once 'api/api.php';
 	
-	// init CiviEvent array
-	$params = array(
-		'version' => 3,
-	);
+	// get dates for this node
+	$node_dates = $node->{WPA_CIVIEVENT_SYNC_DATE_FIELD};
 	
-	// domain_id is filled in by the API
-	$params['title'] = $node->title;
-	$params['description'] = $node->body;
-	$params['summary'] = $node->body;
-	$params['created_date'] = date( 'Y-m-d h:i:s', $node->created );
-	$params['is_public'] = 1;
-	$params['is_active'] = 1;
-	$params['participant_listing_id'] = NULL;
+	// create them...
+	_wpa_civievent_sync_create_civi_events( $node, $node_dates );
 	
-	// add participant_role
-	$params['default_role_id'] = $node->participant_role;
-
-	// add location
-	$params['loc_block_id'] = $node->loc_block_id;
-
-	// process date into format accepted by CiviCRM API
-	$node_date = $node->{WPA_CIVIEVENT_SYNC_DATE_FIELD}[0];
-	
-	/*
-	$node->{WPA_CIVIEVENT_SYNC_DATE_FIELD}[0] looks like this:
-	
-	Array
-	(
-		[value] => 2012-10-26 11:00:00
-		[value2] => 2012-10-26 12:00:00
-		[timezone] => Europe/London
-		[offset] => 3600
-		[offset2] => 3600
-		[timezone_db] => UTC
-		[date_type] => datetime
-	)
-	*/
-	
-	// start
-	$date_start = _wpa_civievent_sync_get_formatted_date( 
-		$node_date, 
-		'value', 
-		'offset' 
-	);
-	
-	// end
-	$date_end = _wpa_civievent_sync_get_formatted_date( 
-		$node_date, 
-		'value2', 
-		'offset2' 
-	);
-	
-	// add dates
-	$params['start_date'] = $date_start;
-	$params['end_date'] = $date_end;
-	
-	// set Civi event type according to taxo
-	$params['event_type_id'] = _wpa_civievent_sync_get_event_type_id(
-		$node->taxonomy[_wpa_civievent_sync_get_vocab_id()]
-	);
-	
-	// use API to create event
-	$result = civicrm_api( 'event', 'create', $params );
-	
-	// did we do okay?
-	if ( $result['is_error'] == '1' ) {
-
-		// not much else we can do here if we do get an error...
-		drupal_set_message(
-			$result['error_message'], 
-			'error'
-		);
-
-		// probably just return
-		return;
-
-	}
-	
-	// let's retrieve our CiviEvent ID
-	$civi_event_id = $result['id'];
-	
-	// store the CiviEvent ID <--> Drupal Node ID relationship in our table
-	db_query(
-		"INSERT {wpa_civievent_sync} SET nid = '%d', civi_eid = %d", 
-		$node->nid, 
-		$civi_event_id
-	);
-	
-	// inform the admin user and give a link
-	if ( user_access( 'access CiviEvent' ) ) {
-	
-		// construct link
-		$link = l(
-			'CiviCRM Event page', 
-			'civicrm/event/manage/eventInfo', 
-			array(
-				'query' => 'reset=1&action=update&id='. $civi_event_id
-			)
-		);
-	
-		drupal_set_message(
-			'A corresponding CiviCRM Event has been created. If you need to, visit the '. $link.' to configure the event further.'
-		);
-		
-	}
 }
 
 
 
 /**
  * Implementation of hook_update().
- * Update the values of the Civi fields to the Civi Contact record
- * Note that no changes to the Contact's groups are made: this is fixed at node creation by the nodetype
+ * Update the values of the CiviEvent fields
  */
 function wpa_civievent_sync_update( $node ) {
 	
 	// revision?
 	if ( $node->revision ) {
 		
-		// handle revisions as new
+		// handle revisions as new: we're not allowing them, but this is here for completeness. 
+		// WARNING: new CiviEvents will be created per revision, so it's unwise to allow them
 		wpa_civievent_sync_insert( $node );
 
 	} else {
-
-		// get the CiviEvent ID
-		$civi_event_id = _wpa_civievent_sync_get_civi_event_id( $node );
+	
+		//  for now, kick out if the node is published
+		if ( $node->status == 1 ) { return; }
 		
-		// initialize CiviCRM and load API
+		
+
+		// initialise CiviCRM and load API
 		civicrm_initialize(TRUE);
 		require_once 'api/api.php';
 		
-		// configure to get our existing event
-		$tmp = array(
-			'id' => $civi_event_id,
-			'version' => 3
-		);
-		
-		// retrieve with API
-		$old_event = civicrm_api( 'event', 'get', $tmp );
-
-		/*
-		$old_event looks like this, because the v3 API does what effectively amounts to a search:
-
-		Array
-		(
-			[is_error] => 0
-			[version] => 3
-			[count] => 1
-			[id] => 374
-			[values] => Array
-				(
-					[374] => Array
-						(
-							[id] => 374
-							[title] => Sync Test
-							[event_title] => Sync Test
-							[description] => <p>This is the body text, let's see how badly the sync dies!</p>
-							[event_description] => <p>This is the body text, let's see how badly the sync dies!</p>
-							[event_type_id] => 10
-							[is_public] => 1
-							[start_date] => 2012-10-26 12:00:00
-							[event_start_date] => 2012-10-26 12:00:00
-							[end_date] => 0000-00-00 00:00:00
-							[event_end_date] => 0000-00-00 00:00:00
-							[is_online_registration] => 0
-							[is_monetary] => 0
-							[contribution_type_id] => 0
-							[is_map] => 0
-							[is_active] => 1
-							[is_show_location] => 1
-							[default_role_id] => 1
-							[is_email_confirm] => 0
-							[is_pay_later] => 0
-							[is_multiple_registrations] => 0
-							[allow_same_participant_emails] => 0
-							[is_template] => 0
-							[created_id] => 1
-							[created_date] => 0000-00-00 00:00:00
-							[custom_58] => Array
-								(
-									[0] => Radstock
-								)
-		
-							[custom_58_-1] => Array
-								(
-									[0] => Radstock
-								)
-		
-						)
-		
-				)
-		
-		)
-		*/
-		
-		// prepopulate update with existing CiviEvent
-		$params = array_shift( $old_event['values'] ); // we don't want to erase any existing values
-		
-		// trace
-		//print_r( $params ); die();
-		
-		/*
-		Array
-		(
-			[id] => 374
-			[title] => Sync Test
-			[event_title] => Sync Test
-			[description] => <p>This is the body text, let's see how badly the sync dies!</p>
-			[event_description] => <p>This is the body text, let's see how badly the sync dies!</p>
-			[event_type_id] => 10
-			[is_public] => 1
-			[start_date] => 2012-10-26 12:00:00
-			[event_start_date] => 2012-10-26 12:00:00
-			[end_date] => 0000-00-00 00:00:00
-			[event_end_date] => 0000-00-00 00:00:00
-			[is_online_registration] => 0
-			[is_monetary] => 0
-			[contribution_type_id] => 0
-			[is_map] => 0
-			[is_active] => 1
-			[is_show_location] => 1
-			[default_role_id] => 1
-			[is_email_confirm] => 0
-			[is_pay_later] => 0
-			[is_multiple_registrations] => 0
-			[allow_same_participant_emails] => 0
-			[is_template] => 0
-			[created_id] => 1
-			[created_date] => 0000-00-00 00:00:00
-			[custom_58] => Array
-				(
-					[0] => Radstock
-				)
-		
-			[custom_58_-1] => Array
-				(
-					[0] => Radstock
-				)
-		
-		)
-		*/
-		
-
-
-		// trace
+		// see what our Drupal node looks like
 		//print_r( $node ); die();
 		
-		// let's see what our node looks like (irrelevant stuff removed)
-		/*
-		stdClass Object
-		(
-			[nid] => 256
-			[vid] => 488
-			[uid] => 1
-			[created] => 1349111074
-			[type] => wpa_civievent_sync
-			[changed] => 1349176076
-			[title] => Sync Test
-			[body] => <p>This is the body text, let's see how badly the sync dies!</p>
-			[format] => 1
-			[name] => admin
-			[date] => 2012-10-01 18:04:34 +0100
-			[status] => 1
-			[op] => Submit
-			[form_id] => wpa_civievent_sync_node_form
-			[comment] => 2
-			[path] => unseen-content/sync-test
-			[pid] => 1153
-			[pathauto_perform_alias] => 1
-			[old_alias] => unseen-content/sync-test
-			[taxonomy] => Array
-				(
-					[4] => 32
-				)
-		
-			[field_event_date] => Array
-				(
-					[0] => Array
-						(
-							[value] => 2012-10-26 11:00:00
-							[value2] => 2012-10-26 12:00:00
-							[timezone] => Europe/London
-							[offset] => 3600
-							[offset2] => 3600
-							[timezone_db] => UTC
-							[date_type] => datetime
-						)
-		
-				)
-		
-			[og_initial_groups] => Array
-				(
-					[22] => 22
-					[165] => 165
-				)
-		
-			[og_groups] => Array
-				(
-					[22] => 22
-					[165] => 165
-				)
-		
-			[teaser] => <p>This is the body text, let's see how badly the sync dies!</p>
-			[validated] => 1
-			[og_theme] => 
-			[is_new] => 
-			[timestamp] => 1349176076
-		)
-		*/
-		
-
-		
-		// first set version
-		$params['version'] = 3;
-
-		// update with our values
-		$params['title'] = $node->title;
-		$params['description'] = $node->body;
-		
-		
-		
-		// set event type ID to that of current node
-		$params['event_type_id'] = _wpa_civievent_sync_get_event_type_id(
-			$node->taxonomy[_wpa_civievent_sync_get_vocab_id()]
-		);
-
-		// add participant_role
-		$params['default_role_id'] = $node->participant_role;
-	
-		// add location
-		$params['loc_block_id'] = $node->loc_block_id;
-	
 
 
-		// process date into format accepted by CiviCRM API
-		$node_date = $node->{WPA_CIVIEVENT_SYNC_DATE_FIELD}[0];
+		// get our existing CiviEvents for this node
+		$civi_events = _wpa_civievent_sync_get_civi_events_per_node( $node );
+		
+		// get new dates
+		$node_dates = $node->{WPA_CIVIEVENT_SYNC_DATE_FIELD};
 		
 		/*
-		$node->{WPA_CIVIEVENT_SYNC_DATE_FIELD}[0] looks like this:
+		// look at the whole Drupal date thing...
+		print_r( array( 
+			
+			'server_offset' => date_offset_get( new DateTime ),
+			'drupal_offset' => variable_get('date_default_timezone', 0),
+			'field' => $node->{WPA_CIVIEVENT_SYNC_DATE_FIELD} 
 		
-		Array
-		(
-			[value] => 2012-10-26 11:00:00
-			[value2] => 2012-10-26 12:00:00
-			[timezone] => Europe/London
-			[offset] => 3600
-			[offset2] => 3600
-			[timezone_db] => UTC
-			[date_type] => datetime
-		)
+		) ); die();
 		*/
 		
-		// start
-		$date_start = _wpa_civievent_sync_get_formatted_date( 
-			$node_date, 
-			'value', 
-			'offset' 
-		);
 		
-		// end
-		$date_end = _wpa_civievent_sync_get_formatted_date( 
-			$node_date, 
-			'value2', 
-			'offset2' 
-		);
-
-		$params['start_date'] = $date_start;
-		$params['end_date'] = $date_end;
 		
-		// trace
-		//print_r( $params ); die();
+		// do they match?
+		if ( count( $node_dates ) == count( $civi_events ) ) {
+			
+			// yes, simply update the existing CiviEvents
+			_wpa_civievent_sync_update_civi_events( $node, $node_dates, $civi_events );
 		
-		// update Civi Record. CRUD: update
-		$result = civicrm_api( 'event', 'update', $params );
-		
-		// did we get an error?
-		if ( $result['is_error'] == '1' ) {
-
-			// not much else we can do here if we do get an error...
-			drupal_set_message( 
-				$result['error_message'], 
-				'error' 
-			);
-
-			// just return?
-			//return;
-
 		} else {
 		
-			// check perms first
-			if ( user_access( 'access CiviEvent' ) ) {
+			// no, either add or delete
 			
-				// feedback
-				drupal_set_message(
-					'The corresponding CiviCRM Event has been updated. You can add further details to it on the '. 
-					l(
-						'CiviCRM Event page', 
-						'civicrm/event/manage/eventInfo', 
-						array('query' => 'reset=1&action=update&id='. $civi_event_id)
-					)
-				);
+			// do we need to delete CiviEvents?
+			if ( count( $node_dates ) < count( $civi_events ) ) {
+			
+				// yes, we have more CiviEvents than Drupal dates: delete some CiviEvents
+				
+				// grab the extra civi_events from the end of the array, preserving keys
+				$to_delete = array_slice( $civi_events, count( $node_dates ), null, true );
+				
+				// delete the extra civi_events
+				_wpa_civievent_sync_delete_civi_events( $node, $to_delete );
+				
+				// grab the array of civi_events we want to keep
+				$to_keep = array_slice( $civi_events, 0, count( $node_dates ), true );
+			
+				// update the remaining civi_events with info from the node_dates
+				_wpa_civievent_sync_update_civi_events( $node, $node_dates, $to_keep );
+			
+			} else {
+			
+				// no, we have more Drupal dates than CiviEvents: add some CiviEvents
+			
+				// grab the array of node_dates we want to update
+				$to_update = array_slice( $node_dates, 0, count( $civi_events ), true );
+
+				// update the existing civi_events for those node_dates
+				_wpa_civievent_sync_update_civi_events( $node, $to_update, $civi_events );
+			
+				// grab the extra node_dates from the end of the array, preserving keys
+				$to_add = array_slice( $node_dates, count( $civi_events ), null, true );
+
+				// create new civi_events for the new node_dates
+				_wpa_civievent_sync_create_civi_events( $node, $to_add );
 				
 			}
-			
-		}
 
-	}
+		}
+		
+		
+		
+	} // end revision check
 
 }
 
@@ -943,12 +657,19 @@ function wpa_civievent_sync_update( $node ) {
 /**
  * Implementation of hook_delete().
  */
-/*
 function wpa_civievent_sync_delete(&$node) {
-  // CRUD: delete
-  // not implemented yet...
+
+	// initialise CiviCRM and load API
+	civicrm_initialize(TRUE);
+	require_once 'api/api.php';
+	
+	// get dates for this node
+	$node_dates = $node->{WPA_CIVIEVENT_SYNC_DATE_FIELD};
+	
+	// delete the lot...
+	_wpa_civievent_sync_delete_civi_events( $node, $node_dates );
+	
 }
-*/
 
 
 
@@ -959,29 +680,18 @@ function wpa_civievent_sync_delete(&$node) {
  */
 function wpa_civievent_sync_load( $node ) {
 
-	// initialized CiviCRM and load API
+	// initialise CiviCRM and load API
 	civicrm_initialize(TRUE);
 	require_once 'api/api.php';
 	
-	// get the CiviEvent ID
-	$additions = _wpa_civievent_sync_get_civi_event_id_object( $node );
+	// get the CiviEvents for this node
+	$civi_events = _wpa_civievent_sync_get_civi_events_per_node( $node );
 	
-	// get the event
-	$params = array( 
-		'id' => $additions->civi_eid,
-		'version' => 3
-	);
+	// create our additions object
+	$additions = (object) array( 'civi_events' => $civi_events );
 	
-	// retrieve event with API call
-	$civi_event = civicrm_api( 'event', 'get', $params );
-	
-	// how did we do?
-	if ( $civi_event['is_error'] == '1' ) {
-		drupal_set_message($civi_event['error_message'], 'error');
-	}
-	
-	// add a registration property
-	$additions->civi_registration = $civi_event['is_online_registration'];
+	// let's have a look
+	//print_r( $additions ); die();
 	
 	// Drupal handles merging the data?
 	return $additions;
@@ -990,28 +700,935 @@ function wpa_civievent_sync_load( $node ) {
 
 
 
-/*
-function civicrm_multiday_event_participants_link($node) {
-  drupal_goto('civicrm/event/search', array('query'=>array(
-  'reset'=>'1',
-  'force'=>'1',
-  'status'=>'true',
-  'event'=>$node->field_civievent_id[LANGUAGE_NONE][0]['value'],
-  'destination'=> 'node/' . $node->nid
-  )));
-}
+/**
+* Override or insert variables into the node templates.
+*
+* @param $vars
+*   An array of variables to pass to the theme template.
+* @param $hook
+*   The name of the template being rendered ("node" in this case.)
 */
+function wpa_civievent_sync_preprocess_node(&$vars, $hook) {
+	
+	// get node
+	//print_r( $vars['node'] ); die();
+	$node = $vars['node'];
+	
+	// if we're showing a node of our custom type in full mode
+	if ( $node->type == 'wpa_civievent_sync' AND !$node->teaser ) {
+	
+		// build list of dates with registration links
+		_wpa_civievent_sync_build_event_list( &$vars, $node->civi_events );
+	
+	}
+	
+	
+}
+
+
 
 
 
 /*
 --------------------------------------------------------------------------------
-Taxonomy stuff
+Event Utilities
 --------------------------------------------------------------------------------
 */
 
 /**
- * Returns the Event Type id associated to a taxo term id
+* Build list of dates with registration and edit links
+*/
+function _wpa_civievent_sync_build_event_list( &$vars, $events ) {
+	
+	//print_r( $events ); die();
+	
+	// init
+	$_html = '';
+	
+	// if we have civi events...
+	if ( count( $events ) > 0 ) {
+		
+		// init list
+		$event_list = array();
+		
+		// make the dates a list
+		foreach( $events AS $event ) {
+		
+			// get id
+			$civi_event_id = $event['id'];
+			
+			// init item
+			$_item = '';
+			
+			// get dates (no offset, as CiviCRM doesn't use it)
+			$_start = _wpa_civievent_sync_get_timestamp( $event['start_date'], 0 );
+			$_end = _wpa_civievent_sync_get_timestamp( $event['end_date'], 0 );
+			
+			// format dates
+			$_start_html = date( 'M j, Y, g:i a', $_start );
+			
+			// check if end is on same day
+			if ( date( 'M j, Y', $_start ) == date( 'M j, Y', $_end ) ) {
+				// check if end is on same am/pm
+				if ( date( 'a', $_start ) == date( 'a', $_end ) ) {
+					$_start_html = date( 'M j, Y, g:i', $_start );
+					$_end_html = date( 'g:i a', $_end );
+				} else {
+					$_end_html = date( 'g:i a', $_end );
+				}
+			} else {
+				$_end_html = date( 'M j, Y, g:i a', $_end );
+			}
+			
+			// add date
+			$_item .= $_start_html.'&mdash;'.$_end_html;
+		
+			// does the event allow registration, and can the user access it?
+			if ( $event['is_online_registration'] == 1 AND user_access('register for events') ) {
+				
+				// yes, add to list
+				$_item .= ' &rarr; '.l(
+					'Register', 
+					'civicrm/event/register', 
+					array(
+						'query' => 'reset=1&id='. $civi_event_id
+					)
+				);
+				
+			}
+			
+			// add link to CiviCRM Event and Event Edit pages
+			if (user_access('access CiviEvent')) {
+			
+				// add page link
+				$_item .= ' &rarr; CiviCRM: '.l(
+					'View', 
+					'civicrm/event/info', 
+					array(
+						'query' => 'reset=1&id='. $civi_event_id,
+						'target' => '_blank',
+					)
+				);
+
+				// add edit link
+				$_item .= ', '.l(
+					'Edit', 
+					'civicrm/event/manage/eventInfo', 
+					array(
+						'query' => 'reset=1&action=update&id='. $civi_event_id,
+						'target' => '_blank',
+					)
+				);
+
+			}
+				
+			// add to list
+			$event_list[] = '<li>'.$_item.'</li>';
+
+		}
+		
+		// convert to list
+		$_html .= '<ul class="civi_event_list">'."\n";
+		$_html .= implode( "\n", $event_list );
+		$_html .= '</ul>'."\n\n";
+		//print_r( $_html ); die();
+	
+	}
+
+	// add to node as var
+	$vars['civi_event_list'] = $_html;		
+
+}
+
+
+
+/**
+ * Creates CiviEvents for a node
+ */
+function _wpa_civievent_sync_create_civi_events( &$node, $node_dates ) {
+
+	// just for safety, check we get some (though we must as it's required)
+	if ( count( $node_dates ) > 0 ) {
+		
+
+
+		// get the site's timezone offset because Date Repeat fails to include the 
+		// correct offset in the $node when there are multiple dates. see docs and:
+		// http://drupal.org/node/1317586
+		$offset = variable_get( 'date_default_timezone', 0 );
+		
+	
+	
+		// init links
+		$links = array();
+		
+		
+		// init CiviEvent array
+		$civi_event = array(
+			// domain_id is filled in by the API
+			'version' => 3,
+		);
+		
+		// add items that are common to all CiviEvents
+		$civi_event['title'] = $node->title;
+		$civi_event['description'] = $node->body;
+		$civi_event['summary'] = $node->teaser;
+		$civi_event['created_date'] = date( 'Y-m-d h:i:s', $node->created );
+		$civi_event['is_public'] = 1;
+		$civi_event['is_active'] = 1;
+		$civi_event['participant_listing_id'] = NULL;
+		
+		// add participant_role
+		$civi_event['default_role_id'] = $node->participant_role;
+	
+		// add location
+		$civi_event['loc_block_id'] = $node->loc_block_id;
+	
+		// add registration
+		$civi_event['is_online_registration'] = $node->is_online_registration;
+	
+		// set Civi event type according to taxonomy term
+		$civi_event['event_type_id'] = _wpa_civievent_sync_get_event_type_id(
+			$node->taxonomy[_wpa_civievent_sync_get_vocab_id()]
+		);
+		
+		
+		
+		// now loop through dates and create CiviEvents per date
+		foreach ( $node_dates AS $node_date ) {
+			
+			// see what our Drupal node date looks like
+			//print_r( $node_date ); die();
+	
+			// start
+			$date_start = _wpa_civievent_sync_get_formatted_date( 
+				$node_date['value'], 
+				$offset
+			);
+			
+			// end
+			$date_end = _wpa_civievent_sync_get_formatted_date( 
+				$node_date['value2'], 
+				$offset
+			);
+			
+			// overwrite dates
+			$civi_event['start_date'] = $date_start;
+			$civi_event['end_date'] = $date_end;
+			
+			// use API to create event
+			$result = civicrm_api( 'event', 'create', $civi_event );
+			
+			// did we do okay?
+			if ( $result['is_error'] == '1' ) {
+		
+				// not much else we can do here if we get an error...
+				drupal_set_message(
+					$result['error_message'], 
+					'error'
+				);
+		
+				// for now, kick out
+				return;
+		
+			}
+			
+			// let's retrieve our CiviEvent ID
+			$civi_event_id = $result['id'];
+			
+			// store the Drupal Node -> CiviEvent relationship in our table
+			db_query(
+				"INSERT {wpa_civievent_sync} SET nid = '%d', civi_eid = %d", 
+				$node->nid, 
+				$civi_event_id
+			);
+			
+			// make date readable
+			$human_date = date( 
+				'M j, Y, g:i a',
+				_wpa_civievent_sync_get_timestamp( $date_start, $offset )
+			);
+			
+			// construct link
+			$links[] = l(
+				'CiviCRM Event ('.$human_date.')', 
+				'civicrm/event/manage/eventInfo', 
+				array(
+					'query' => 'reset=1&action=update&id='. $civi_event_id
+				)
+			);
+			
+		} // end loop
+		
+	} // end check for empty array
+	
+	
+		
+	// inform the admin user
+	if ( user_access( 'access CiviEvent' ) ) {
+		
+		// where there is only one CiviEvent...
+		if ( count( $node_dates ) == 1 ) {
+		
+			// contruct link
+			$link = l(
+				'CiviCRM Event page', 
+				'civicrm/event/manage/eventInfo', 
+				array('query' => 'reset=1&action=update&id='. $civi_event_id)
+			);
+
+			// feedback
+			drupal_set_message(
+				'The corresponding CiviCRM Event has been updated. '.
+				'You can add further details to it on the '.$link
+			);
+			
+		}
+		
+		// where there are repeating CiviEvents...
+		if ( count( $node_dates ) > 1 ) {
+		
+			// construct list of links
+			$link_list = implode( '<br/>', $links );
+			
+			// feedback
+			drupal_set_message(
+				'The following CiviCRM Events have been created. '.
+				'If you need to, visit the following links to configure the events further:<br/>'.$link_list
+			);
+			
+		}
+		
+	}
+	
+}
+
+
+
+/**
+ * Updates CiviEvents for a node, where there are no event additions or deletions
+ */
+function _wpa_civievent_sync_update_civi_events( &$node, $node_dates, $civi_events ) {
+
+	// get the site's timezone offset because Date Repeat fails to include the 
+	// correct offset in the $node when there are multiple dates. see docs and:
+	// http://drupal.org/node/1317586
+	$offset = variable_get( 'date_default_timezone', 0 );
+	
+	
+	
+	// get event_type_id just once
+	$event_type_id = _wpa_civievent_sync_get_event_type_id(
+		$node->taxonomy[_wpa_civievent_sync_get_vocab_id()]
+	);
+	
+
+
+	// for this loop, we assume that each node_date item corresponds in sequence
+	// with each civi_event date. I can't see any other way to link them...
+	
+	
+	
+	// init counter
+	$count = 0;
+	
+	// init links
+	$links = array();
+
+	// loop through new dates
+	foreach ( $node_dates AS $node_date ) {
+		
+		// see what our Drupal node date looks like
+		//print_r( $node_date ); die();
+
+		// get corresponding CiviCRM Event in sequence
+		$civi_event = array_shift( $civi_events );
+
+		// get id
+		$civi_event_id = $civi_event['id'];
+		
+		// add API version
+		$civi_event['version'] = 3;
+		
+		// update with new values
+		$civi_event['title'] = $node->title;
+		$civi_event['description'] = $node->body;
+		$civi_event['summary'] = $node->teaser;
+		$civi_event['is_public'] = 1;
+		$civi_event['is_active'] = 1;
+		
+		// update participant_role
+		$civi_event['default_role_id'] = $node->participant_role;
+	
+		// update location
+		$civi_event['loc_block_id'] = $node->loc_block_id;
+	
+		// add registration
+		$civi_event['is_online_registration'] = $node->is_online_registration;
+	
+		// update Civi event type according to taxonomy term
+		$civi_event['event_type_id'] = $event_type_id;
+		
+		
+		
+		// start
+		$date_start = _wpa_civievent_sync_get_formatted_date( 
+			$node_date['value'], 
+			$offset
+		);
+		
+		// end
+		$date_end = _wpa_civievent_sync_get_formatted_date( 
+			$node_date['value2'], 
+			$offset
+		);
+		
+		// update dates
+		$civi_event['start_date'] = $date_start;
+		$civi_event['end_date'] = $date_end;
+		
+		// trace
+		//print_r( $civi_event ); die();
+		
+		
+		
+		// update CiviEvent via API
+		$result = civicrm_api( 'event', 'update', $civi_event );
+		
+		// did we get an error?
+		if ( $result['is_error'] == '1' ) {
+
+			// not much else we can do here if we do get an error...
+			drupal_set_message( 
+				$result['error_message'], 
+				'error' 
+			);
+			
+			// kick out
+			return;
+
+		} else {
+		
+			// make date readable
+			$human_date = date( 
+				'M j, Y, g:i a',
+				_wpa_civievent_sync_get_timestamp( $date_start, 0 ) // we've already offest
+			);
+			
+			// construct link
+			$links[] = l(
+				'CiviCRM Event ('.$human_date.')', 
+				'civicrm/event/manage/eventInfo', 
+				array(
+					'query' => 'reset=1&action=update&id='. $civi_event_id
+				)
+			);
+			
+		}
+		
+		// increment
+		$count++;
+		
+	} // end foreach
+
+
+
+	// inform the admin user
+	if ( user_access( 'access CiviEvent' ) ) {
+		
+		// where there is only one CiviEvent...
+		if ( count( $node_dates ) == 1 ) {
+		
+			// contruct link
+			$link = l(
+				'CiviCRM Event page', 
+				'civicrm/event/manage/eventInfo', 
+				array('query' => 'reset=1&action=update&id='. $civi_event_id)
+			);
+
+			// feedback
+			drupal_set_message(
+				'The corresponding CiviCRM Event has been updated. '.
+				'You can add further details to it on the '.$link
+			);
+			
+		}
+		
+		// where there are repeating CiviEvents...
+		if ( count( $node_dates ) > 1 ) {
+		
+			// construct list of links
+			$link_list = implode( '<br/>', $links );
+			
+			// feedback
+			drupal_set_message(
+				'The following CiviCRM Events have been updated. '.
+				'If you need to, visit the following links to configure the events further:<br/>'.$link_list
+			);
+			
+		}
+		
+	}
+	
+}
+
+
+
+/**
+ * Deletes CiviEvents for a node
+ */
+function _wpa_civievent_sync_delete_civi_events( &$node, $to_delete ) {
+
+	// init message
+	$message = array();
+
+	// loop through events to delete
+	foreach ( $to_delete AS $civi_event ) {
+	
+		// see what our event looks like
+		//print_r( $civi_event ); die();
+
+		// get id from array
+		$civi_event_id = $civi_event['id'];
+		
+		// construct array for CiviCRM Event API
+		$params = array(
+			'version' => 3,
+			'id' => $civi_event_id,
+			'skip_undelete' => 1,
+		);
+
+		// delete from CiviEvent via API
+		$result = civicrm_api( 'event', 'delete', $params );
+		
+		// did we get an error?
+		if ( $result['is_error'] == '1' ) {
+
+			// not much else we can do here if we do get an error...
+			drupal_set_message( 
+				$result['error_message'], 
+				'error' 
+			);
+			
+			// kick out
+			return;
+
+		}
+		
+		// remove the Drupal Node -> CiviEvent relationship from our table
+		db_query(
+			"DELETE FROM {wpa_civievent_sync} WHERE nid = '%d' AND civi_eid = '%d'", 
+			$node->nid, 
+			$civi_event_id
+		);
+		
+		// make date readable
+		$human_date = date( 
+			'M j, Y, g:i a',
+			_wpa_civievent_sync_get_timestamp( $civi_event['start_date'], 0 ) // we've already offest
+		);
+		
+		// add to message
+		$message[] = 'CiviCRM Event ('.$human_date.')';
+		
+	} // end foreach
+
+
+
+	// inform the admin user
+	if ( user_access( 'access CiviEvent' ) ) {
+		
+		// format message
+		$message_list = implode( '<br/>', $message );
+		
+		// feedback
+		drupal_set_message(
+			'The following CiviCRM Events have been deleted.<br/>'.$message_list
+		);
+		
+	}
+	
+}
+
+
+
+/**
+ * Builds a form array for Participant Roles
+ */
+function _wpa_civievent_sync_get_formatted_participant_roles( &$node ) {
+
+	// first, get participant_role option_group ID
+	$opt_group = array(
+		'version' =>'3', 
+		'name' =>'participant_role'
+	);
+	$participant_role = civicrm_api( 'OptionGroup', 'getsingle', $opt_group );
+	//print_r( $participant_role ); die();
+	
+	// next, get option_values for that group
+	$opt_values = array(
+		'version' =>'3',
+		'is_active' => 1,
+		'option_group_id' => $participant_role['id']
+	);
+	$participant_roles = civicrm_api( 'OptionValue', 'get', $opt_values );
+	//print_r( $participant_roles ); die();
+	
+	// did we get any?
+	if ( count( $participant_roles['values'] ) > 0 ) {
+		
+		// init an array for the form
+		$opts = array();
+		
+		// get the values array
+		$roles = $participant_roles['values'];
+		
+		// loop
+		foreach( $roles AS $key => $role ) {
+			
+			// get key
+			$new_key = $role['value'];
+			
+			// format for Drupal
+			$opts[$new_key] = $role['label'];
+			
+		}
+		
+	}
+	
+	// check
+	//print_r( $opts ); die();
+
+	// return participant_role
+	return array(
+		'#type' => 'select',
+		'#title' => check_plain($participant_role['description']),
+		'#description' => 'The Role you select here is automatically assigned to people when they register online for this event (usually the default <em>Attendee</em> role).',
+		'#default_value' => 6, // NOTE: for now, use ID=6, Playworker
+		'#options' => $opts,
+		'#multiple' => 0,
+		'#size' => 0,
+		'#weight' => 6,
+		'#required' => 1,
+	);
+	
+}
+
+
+
+/**
+ * Builds a form array for CiviEvent Registration
+ */
+function _wpa_civievent_sync_get_registration( &$node ) {
+	
+	// did we get a node?
+	if ( isset( $node->civi_events ) ) {
+	
+		//print_r( $node->civi_events ); die();
+
+		// get the CiviEvents from the node
+		$civi_events = array_values( $node->civi_events );
+		
+		// set default
+		$default = $civi_events[0]['is_online_registration'];
+		
+	} else {
+	
+		// set default as null
+		$default = null;
+		
+	}
+	
+	// return is_online_registration
+	return array(
+		'#type' => 'select',
+		'#title' => check_plain('Online Event Registration'),
+		'#description' => 'Choose whether or not the events will allow online registration. <em>WARNING</em> changing this will set the event registration for <em>all events</em>.',
+		'#default_value' => $default,
+		'#options' => array(
+		
+			'' => 'No',
+			'1' => 'Yes',
+
+		),
+		'#multiple' => 0,
+		'#size' => 0,
+		'#weight' => 6,
+		'#required' => 0,
+	);
+	
+}
+
+
+
+/**
+ * Builds a form array for CiviEvent Locations
+ */
+function _wpa_civievent_sync_get_event_locations( &$node ) {
+	
+	//print_r( $node ); die();
+
+	// since this cannot be done using the API, call CiviCRM direct...
+	require_once 'CRM/Event/BAO/Event.php';
+	require_once 'CRM/Core/BAO/Location.php';
+	
+	// get locations for all events
+	$locations = CRM_Event_BAO_Event::getLocationEvents();
+	//print_r( $locations ); die();
+	
+	// add default
+	_array_unshift_assoc( $locations, '', '- no location set -' );
+
+	// did we get a node?
+	if ( isset( $node->civi_events ) ) {
+	
+		//print_r( $node->civi_events ); die();
+
+		// get the CiviEvents from the node
+		$civi_events = array_values( $node->civi_events );
+		
+		// set default
+		$default = $civi_events[0]['loc_block_id'];
+		
+	} else {
+	
+		// set default as null
+		$default = null;
+		
+	}
+	
+	// return loc_block_id
+	return array(
+		'#type' => 'select',
+		'#title' => check_plain('Event Location'),
+		'#description' => 'Select a location for your event(s). If the location does not appear in the dropdown, please contact your site administrator to have it added to CiviCRM. <em>WARNING</em> changing this will set the event location for <em>all events</em>.',
+		'#default_value' => $default,
+		'#options' => $locations,
+		'#multiple' => 0,
+		'#size' => 0,
+		'#weight' => 5,
+		'#required' => 0,
+	);
+	
+}
+
+
+
+/**
+ * Get the CiviEvent ID for a Drupal node
+ * Used only to grab the event location of the first associated event
+ */
+function _wpa_civievent_sync_get_civi_event_id( &$node ) {
+
+	// get the CiviEvent ID object
+	$db_object = _wpa_civievent_sync_get_civi_event_id_object( $node );
+	
+	// return ID as variable
+	return $db_object->civi_eid;
+
+}
+
+
+
+/**
+ * Get the first CiviEvent ID for a Drupal node as object
+ *
+ * We could do this as an anonymous object instead, eg:
+ *
+ * $obj = (object) array( 'foo' => 'bar', 'property' => 'value' );
+ * echo $obj->foo; // prints 'bar'
+ * echo $obj->property; // prints 'value'
+ *
+ * Used only to grab the event location of the first associated event
+ */
+function _wpa_civievent_sync_get_civi_event_id_object( &$node ) {
+
+	// return the CiviEvent ID object from our table
+	return db_fetch_object(
+		db_query(
+			'SELECT civi_eid FROM {wpa_civievent_sync} WHERE nid = %d LIMIT 1', 
+			$node->nid
+		)
+	);
+	
+}
+
+
+
+/**
+ * Get multiple CiviEvent IDs for a Drupal node as array of objects
+ */
+function _wpa_civievent_sync_get_civi_event_id_objects( &$node ) {
+
+	// init
+	$return = array();
+
+	// get the CiviEvent IDs from our table
+	$result = db_query(
+		'SELECT civi_eid FROM {wpa_civievent_sync} WHERE nid = %d', 
+		$node->nid
+	);
+	
+	// loop through 'em
+	while( $row = db_fetch_object( $result ) ) {
+		
+		// construct an array of objects
+		$return[] = $row;
+		
+	}
+	
+	// --<
+	return $return;
+	
+}
+
+
+
+/**
+ * Get multiple CiviEvent IDs for a Drupal node as array (useful for in_array()
+ */
+function _wpa_civievent_sync_get_civi_event_ids_array( &$node ) {
+
+	// init
+	$return = array();
+
+	// get the CiviEvent IDs from our table
+	$result = db_query(
+		'SELECT civi_eid FROM {wpa_civievent_sync} WHERE nid = %d', 
+		$node->nid
+	);
+	
+	// loop through 'em
+	while( $row = db_fetch_array( $result ) ) {
+		
+		// construct an array of objects
+		$return[] = $row['civi_eid'];
+		
+	}
+	
+	// --<
+	return $return;
+	
+}
+
+
+
+/**
+ * Get multiple CiviEvents for a Drupal node
+ */
+function _wpa_civievent_sync_get_civi_events_per_node( &$node ) {
+
+	// init
+	$return = array();
+
+	// get all CiviEvent IDs for this node
+	$civi_event_ids = _wpa_civievent_sync_get_civi_event_ids_array( $node );
+	
+	/*
+	NOTE: the CiviCRM API cannot retrieve all these events with one call:
+	we actually have to loop through the IDs and get them individually! FFS!
+	
+	We need to do this by event IDs because we cannot guarantee that there won't
+	be another node with repeating events with the same name.
+		
+	The API is supposed to support this kind of construct, but doesn't:
+	
+	// params
+	$tmp = array(
+		'id' => array(
+			'IN' => array(1,2,3,4)
+		),
+		'version' => 3,
+	);
+	
+	// retrieve with API
+	$events = civicrm_api( 'event', 'get', $tmp );
+
+	*/
+	
+	// so then, get all CiviEvents with these IDs
+	if ( count( $civi_event_ids ) > 0 ) {
+	
+		// loop
+		foreach( $civi_event_ids AS $civi_event_id ) {
+			
+			// configure to get our existing event
+			$tmp = array(
+				'id' => $civi_event_id,
+				'version' => 3,
+			);
+			
+			// retrieve with API
+			$civi_event = civicrm_api( 'event', 'getsingle', $tmp );
+			
+			// check for errors
+			if ( $civi_event['is_error'] == '1' ) {
+			
+				// set message
+				drupal_set_message( $civi_event['error_message'], 'error' );
+				
+				// return empty array
+				return array();
+			
+			}
+			
+			// we're okay, add to return
+			$return[ $civi_event['id'] ] = $civi_event;
+
+		}
+		
+	}
+	
+	// see what our array looks like
+	//print_r( $return ); die();
+	
+	// --<
+	return $return;
+	
+}
+
+
+
+
+
+
+/*
+--------------------------------------------------------------------------------
+Taxonomy Utilities
+--------------------------------------------------------------------------------
+*/
+
+/*
+ * Helper function to make only one call to CiviCRM API for event types list
+ * Returns keyed array:
+ *   [event type id] => event name
+ */
+function _wpa_civievent_sync_get_civicrm_event_types() {
+	
+	// init
+	static $wpa_civievent_sync_types;
+	
+	// do we have it?
+	if ( !isset( $wpa_civievent_sync_types ) ) {
+		
+		// no, let's get it
+		civicrm_initialize(TRUE);
+
+		// TODO: make more stable by using CiviCRM API
+		require_once 'CRM/Core/OptionGroup.php';
+		$wpa_civievent_sync_types = CRM_Core_OptionGroup::values('event_type');
+
+	}
+	
+	// --<
+	return $wpa_civievent_sync_types;
+
+}
+
+
+
+/**
+ * Returns the Event Type id associated to a taxonomy term id
  */
 function _wpa_civievent_sync_get_event_type_id($tid) {
 	
@@ -1122,7 +1739,7 @@ function _wpa_civievent_sync_customise_taxonomy_form( &$form, &$form_state, $for
 	}
 	
 	// prevent adding of terms to the event type vocabulary
-	if ( $form_id == 'taxonomy_form_term' && $form['vid']['#value'] == $vid && !isset($form['tid']) ) { 
+	if ( $form_id == 'taxonomy_form_term' AND $form['vid']['#value'] == $vid AND !isset($form['tid']) ) { 
 
 		// same form id for editing terms!
 		$form = array(); // just kill the form. Blunt and cruel.
@@ -1145,7 +1762,7 @@ function _wpa_civievent_sync_customise_taxonomy_form( &$form, &$form_state, $for
 	}
 	
 	// prevent deletion of terms
-	if ( $form_id == 'taxonomy_form_term' && $form['vid']['#value'] == $vid && isset($form['tid']) ) {
+	if ( $form_id == 'taxonomy_form_term' AND $form['vid']['#value'] == $vid AND isset($form['tid']) ) {
 
 		$form['help_wpa_civievent_sync_term_edit'] = array(
 			'#value' => t('This term belongs to the designated Civi Event vocabulary and cannot be deleted.'),
@@ -1160,29 +1777,27 @@ function _wpa_civievent_sync_customise_taxonomy_form( &$form, &$form_state, $for
 
 
 
+
+
+
 /*
 --------------------------------------------------------------------------------
-Utilities
+Misc Utilities
 --------------------------------------------------------------------------------
 */
 
 /**
  * Converts Drupal date to CiviCRM date
  */
-function _wpa_civievent_sync_get_formatted_date( $date, $field1, $field2 ) {
+function _wpa_civievent_sync_get_formatted_date( $date, $offset ) {
 
-	// convert date, held in non-timestamp format
-	$_date_array = explode( ' ', $date[$field1] );
-	$_date = explode( '-', $_date_array[0] );
-	$_time = explode( ':', $_date_array[1] );
-	$_timestamp = mktime($_time[0], $_time[1], $_time[2], $_date[1], $_date[2], $_date[0]);
-	
 	// construct date
 	$date_formatted = date(
 		'Y-m-d H:i:s', 
-		$_timestamp + $date[$field2]
+		_wpa_civievent_sync_get_timestamp( $date, $offset )
 	);
 	
+	// --<
 	return $date_formatted;
 
 }
@@ -1190,157 +1805,22 @@ function _wpa_civievent_sync_get_formatted_date( $date, $field1, $field2 ) {
 
 
 /**
- * Builds a form array for Participant Roles
+ * Converts Drupal date to timestamp
  */
-function _wpa_civievent_sync_get_formatted_participant_roles() {
+function _wpa_civievent_sync_get_timestamp( $date, $offset ) {
 
-	// first, get participant_role option_group ID
-	$optgrp = array(
-		'version' =>'3', 
-		'name' =>'participant_role'
-	);
-	$participant_role = civicrm_api( 'OptionGroup', 'getsingle', $optgrp );
-	//print_r( $participant_role ); die();
-	
-	// next, get option_values for that group
-	$optvals = array(
-		'version' =>'3',
-		'is_active' => 1,
-		'option_group_id' => $participant_role['id']
-	);
-	$participant_roles = civicrm_api( 'OptionValue', 'get', $optvals );
-	//print_r( $participant_roles ); die();
-	
-	// did we get any?
-	if ( count( $participant_roles['values'] ) > 0 ) {
-		
-		// init an array for the form
-		$opts = array();
-		
-		// get the values array
-		$roles = $participant_roles['values'];
-		
-		// loop
-		foreach( $roles AS $key => $role ) {
-			
-			// get key
-			$new_key = $role['value'];
-			
-			// format for Drupal
-			$opts[$new_key] = $role['label'];
-			
-		}
-		
-	}
-	
-	// check
-	//print_r( $opts ); die();
-
-	// return participant_role
-	return array(
-		'#type' => 'select',
-		'#title' => check_plain($participant_role['description']),
-		'#description' => 'The Role you select here is automatically assigned to people when they register online for this event (usually the default <em>Attendee</em> role).',
-		'#default_value' => 6, // for now, use ID=6, Playworker
-		'#options' => $opts,
-		'#multiple' => 0,
-		'#size' => 0,
-		'#weight' => 5,
-		'#required' => 1,
+	// convert date, held in non-timestamp format, to timestamp
+	$_date_time_array = explode( ' ', $date );
+	$_date_array = explode( '-', $_date_time_array[0] );
+	$_time_array = explode( ':', $_date_time_array[1] );
+	$_timestamp = mktime(
+		$_time_array[0], $_time_array[1], $_time_array[2], 
+		$_date_array[1], $_date_array[2], $_date_array[0]
 	);
 	
-}
+	// --<
+	return $_timestamp + $offset;
 
-
-
-/**
- * Builds a form array for CiviEvent Locations
- */
-function _wpa_civievent_sync_get_event_locations( &$node ) {
-	
-	// since this cannot be done using the API, call CiviCRM direct...
-	require_once 'CRM/Event/BAO/Event.php';
-	require_once 'CRM/Core/BAO/Location.php';
-	
-	// get locations for all events
-	$locations = CRM_Event_BAO_Event::getLocationEvents();
-	
-	// add default
-	_array_unshift_assoc( $locations, '', '- select -' );
-
-	// trace
-	//print_r( $locations ); die();
-	
-	// get the CiviEvent ID
-	$civi_event_id = _wpa_civievent_sync_get_civi_event_id( $node );
-	
-	// get the event
-	$params = array( 
-		'id' => $civi_event_id,
-		'version' => 3
-	);
-	
-	// get existing location, if any
-	$civi_event = civicrm_api( 'event', 'getsingle', $params );
-	
-	// how did we do?
-	if ( civicrm_error( $result )) {
-		drupal_set_message($result['error_message'], 'error');
-	}
-	
-	// return loc_block_id
-	return array(
-		'#type' => 'select',
-		'#title' => check_plain('Event Location'),
-		'#description' => 'Select a location for your event. If the location does not appear in the dropdown, please contact your site administrator to have it added to CiviCRM.',
-		'#default_value' => $civi_event['loc_block_id'], // for now, use null
-		'#options' => $locations,
-		'#multiple' => 0,
-		'#size' => 0,
-		'#weight' => 5,
-		'#required' => 0,
-	);
-	
-}
-
-
-
-/**
- * Get the CiviEvent ID for a Drupal node
- */
-function _wpa_civievent_sync_get_civi_event_id( &$node ) {
-
-	// get the CiviEvent ID object
-	$db_object = _wpa_civievent_sync_get_civi_event_id_object( $node );
-	
-	// return ID as variable
-	return $db_object->civi_eid;
-
-}
-
-
-
-/**
- * Get the CiviEvent ID for a Drupal node as object (sometimes we need the object
- * instead of the value, see hook_load() for example)
- *
- * We could do this as an anonymous object instead, eg:
- *
- * $obj = (object) array( 'foo' => 'bar', 'property' => 'value' );
- * echo $obj->foo; // prints 'bar'
- * echo $obj->property; // prints 'value'
- *
- */
-function _wpa_civievent_sync_get_civi_event_id_object( &$node ) {
-
-	// return the CiviEvent ID object from our table
-	return db_fetch_object(
-		db_query(
-			'SELECT civi_eid FROM {wpa_civievent_sync} WHERE nid = %d', 
-			$node->nid
-		)
-	);
-	
 }
 
 
