@@ -107,7 +107,7 @@ function wpa_civievent_sync_menu() {
 function wpa_civievent_sync_categories() {
 
 	$wpa_civievent_sync_types = _wpa_civievent_sync_get_civicrm_event_types();
-	$vid = _wpa_civievent_sync_get_vid();
+	$vid = _wpa_civievent_sync_get_vocab_id();
 	$terms = variable_get('wpa_civievent_sync_terms', array());
 	
 	// store some values for when we submit
@@ -229,6 +229,7 @@ function wpa_civievent_sync_categories_submit($form, &$form_state) {
 	}
 	
 	// store for our module's use
+	//variable_set('wpa_civievent_sync_terms', '');
 	variable_set('wpa_civievent_sync_terms', $form_state['values']['terms']);
 	
 	// feedback
@@ -657,17 +658,14 @@ function wpa_civievent_sync_update( $node ) {
 /**
  * Implementation of hook_delete().
  */
-function wpa_civievent_sync_delete(&$node) {
+function wpa_civievent_sync_delete( &$node ) {
 
 	// initialise CiviCRM and load API
 	civicrm_initialize(TRUE);
 	require_once 'api/api.php';
 	
-	// get dates for this node
-	$node_dates = $node->{WPA_CIVIEVENT_SYNC_DATE_FIELD};
-	
 	// delete the lot...
-	_wpa_civievent_sync_delete_civi_events( $node, $node_dates );
+	_wpa_civievent_sync_delete_civi_events( $node, $node->civi_events );
 	
 }
 
@@ -708,17 +706,28 @@ function wpa_civievent_sync_load( $node ) {
 * @param $hook
 *   The name of the template being rendered ("node" in this case.)
 */
-function wpa_civievent_sync_preprocess_node(&$vars, $hook) {
+function wpa_civievent_sync_preprocess_node( &$vars, $hook ) {
 	
 	// get node
 	//print_r( $vars['node'] ); die();
 	$node = $vars['node'];
+	//_wpa_die( $node->{WPA_CIVIEVENT_SYNC_DATE_FIELD} );
 	
 	// if we're showing a node of our custom type in full mode
-	if ( $node->type == 'wpa_civievent_sync' AND !$node->teaser ) {
+	if ( $node->type == 'wpa_civievent_sync' ) {
 	
 		// build list of dates with registration links
-		_wpa_civievent_sync_build_event_list( &$vars, $node->civi_events );
+		_wpa_civievent_sync_build_event_list( 
+			&$vars, 
+			$node->civi_events,
+			$node->{WPA_CIVIEVENT_SYNC_DATE_FIELD}
+		);
+	
+		// get other event data
+		_wpa_civievent_sync_build_event_data( 
+			&$vars, 
+			$node->civi_events 
+		);
 	
 	}
 	
@@ -736,9 +745,105 @@ Event Utilities
 */
 
 /**
+* Add other display data to the event node
+*/
+function _wpa_civievent_sync_build_event_data( &$vars, $events ) {
+	
+	/*
+	------------------------------------
+	At minimum, we need:
+	------------------------------------
+	
+	<address>
+	[street_address]<br />
+	[supplemental_address_1]<br />
+	[supplemental_address_2]<br />
+	[city]<br />
+	[county]<br />
+	[postal_code]<br />
+	</address>
+
+	<div class="event-contact">
+	[email]<br />
+	[phone]
+	</div>
+
+	------------------------------------
+	*/
+
+	// did we get an array of events?
+	if ( is_array( $events ) AND count( $events ) > 0 ) {
+	
+		// get event
+		$_event = array_shift( array_values( $events ) );
+		//_wpa_die( $_event );
+		
+		
+		// get address from view
+		$output = array_shift( views_get_view_result( 'civicrm_event', 'page_1', $_event['id'] ) );
+		//print_r( $output ); die();
+		
+		// construct address
+		$address_array = array();
+		if ( $output->civicrm_address_street_address ) 
+			$address_array[] = $output->civicrm_address_street_address;
+		if ( $output->civicrm_address_supplemental_address_1 ) 
+			$address_array[] = $output->civicrm_address_supplemental_address_1;
+		if ( $output->civicrm_address_supplemental_address_2 ) 
+			$address_array[] = $output->civicrm_address_supplemental_address_2;
+		if ( $output->civicrm_address_city ) 
+			$address_array[] = $output->civicrm_address_city;
+		if ( $output->civicrm_address_postal_code ) 
+			$address_array[] = $output->civicrm_address_postal_code;
+		$address = '<address>'."\n";
+		$address .= implode( '<br />'."\n", $address_array );
+		$address .= '</address>'."\n\n";
+		
+		// add to vars
+		$vars['civi_event_address'] = $address;
+		$vars['civi_event_location_details'] = str_replace( "\n", '', $address );
+		
+		
+		
+		// get contact from view
+		$output = array_shift( views_get_view_result( 'civicrm_event', 'page_3', $_event['id'] ) );
+		//print_r( $output ); die();
+		
+		// construct contact
+		$contact_array = array();
+		if ( $output->civicrm_email_email ) 
+			$contact_array[] = '<a href="mailto:'.$output->civicrm_email_email.'" title="Email contact for this event">'.
+				$output->civicrm_email_email.
+				'</a>';
+		if ( $output->civicrm_phone_phone ) 
+			$contact_array[] = $output->civicrm_phone_phone;
+		$contact .= implode( '<br />'."\n", $contact_array );
+		
+		// add to vars
+		$vars['civi_event_contact'] = $contact;
+		
+		
+		
+		// get location from view
+		$output = array_shift( views_get_view_result( 'civicrm_event', 'page_5', $_event['id'] ) );
+		//print_r( $output ); die();
+		
+		// add to vars, if present
+		if ( $output->civicrm_address_geo_code_1 ) 
+			$vars['civi_event_latitude'] = $output->civicrm_address_geo_code_1;
+		if ( $output->civicrm_address_geo_code_2 ) 
+			$vars['civi_event_longitude'] = $output->civicrm_address_geo_code_2;
+		
+	}
+	
+}
+
+
+
+/**
 * Build list of dates with registration and edit links
 */
-function _wpa_civievent_sync_build_event_list( &$vars, $events ) {
+function _wpa_civievent_sync_build_event_list( &$vars, $events, $dates ) {
 	
 	//print_r( $events ); die();
 	
@@ -751,79 +856,130 @@ function _wpa_civievent_sync_build_event_list( &$vars, $events ) {
 		// init list
 		$event_list = array();
 		
+		// init counter
+		$count = 0;
+		
 		// make the dates a list
 		foreach( $events AS $event ) {
 		
-			// get id
-			$civi_event_id = $event['id'];
+			// default to active
+			$del_pre = '';
+			$del_post = '';
+		
+			// if inactive
+			if ( $event['is_active'] == '0' ) {
 			
-			// init item
-			$_item = '';
+				// show as inactive
+				$del_pre = '<del>';
+				$del_post = '</del>';
+			
+			}
 			
 			// get dates (no offset, as CiviCRM doesn't use it)
 			$_start = _wpa_civievent_sync_get_timestamp( $event['start_date'], 0 );
-			$_end = _wpa_civievent_sync_get_timestamp( $event['end_date'], 0 );
 			
-			// format dates
-			$_start_html = date( 'M j, Y, g:i a', $_start );
-			
-			// check if end is on same day
-			if ( date( 'M j, Y', $_start ) == date( 'M j, Y', $_end ) ) {
-				// check if end is on same am/pm
-				if ( date( 'a', $_start ) == date( 'a', $_end ) ) {
-					$_start_html = date( 'M j, Y, g:i', $_start );
-					$_end_html = date( 'g:i a', $_end );
+			// is it greater than yesterday, so we only show today onwards?
+			if ( $_start >= time() ) {
+
+				// get id
+				$civi_event_id = $event['id'];
+				
+				// init item
+				$_item = '';
+				
+				/*
+				// get dates (no offset, as CiviCRM doesn't use it)
+				$_start = _wpa_civievent_sync_get_timestamp( $event['start_date'], 0 );
+				$_end = _wpa_civievent_sync_get_timestamp( $event['end_date'], 0 );
+				
+				// format dates
+				$_start_html = date( 'M j, Y, g:i a', $_start );
+				
+				// check if end is on same day
+				if ( date( 'M j, Y', $_start ) == date( 'M j, Y', $_end ) ) {
+					// check if end is on same am/pm
+					if ( date( 'a', $_start ) == date( 'a', $_end ) ) {
+						$_start_html = date( 'M j, Y, g:i', $_start );
+						$_end_html = date( 'g:i a', $_end );
+					} else {
+						$_end_html = date( 'g:i a', $_end );
+					}
 				} else {
-					$_end_html = date( 'g:i a', $_end );
+					$_end_html = date( 'M j, Y, g:i a', $_end );
 				}
-			} else {
-				$_end_html = date( 'M j, Y, g:i a', $_end );
-			}
-			
-			// add date
-			$_item .= $_start_html.'&mdash;'.$_end_html;
-		
-			// does the event allow registration, and can the user access it?
-			if ( $event['is_online_registration'] == 1 AND user_access('register for events') ) {
 				
-				// yes, add to list
-				$_item .= ' &rarr; '.l(
-					'Register', 
-					'civicrm/event/register', 
-					array(
-						'query' => 'reset=1&id='. $civi_event_id
-					)
-				);
+				// add date
+				$_item .= $_start_html.'&mdash;'.$_end_html;
+				*/
 				
-			}
-			
-			// add link to CiviCRM Event and Event Edit pages
-			if (user_access('access CiviEvent')) {
-			
-				// add page link
-				$_item .= ' &rarr; CiviCRM: '.l(
-					'View', 
-					'civicrm/event/info', 
-					array(
-						'query' => 'reset=1&id='. $civi_event_id,
-						'target' => '_blank',
-					)
-				);
+				// add date from Drupal to avoid timezone issues
+				$_item .= $del_pre.'<span class="date-display-civi-year">'.date( 'Y', $_start ).'</span> '.$del_post;
+				$_item .= $del_pre.'<span class="date-display-civi-day">'.date( 'M j', $_start ).'</span> '.$del_post;
+				$_item .= $del_pre.$dates[$count]['view'].$del_post;
+				
+				// does the event allow registration, and can the user access it?
+				if ( $event['is_online_registration'] == 1 AND user_access('register for events') ) {
+					
+					// yes, add to list
+					$_item .= '<span class="date-display-civi-register-link">';
 
-				// add edit link
-				$_item .= ', '.l(
-					'Edit', 
-					'civicrm/event/manage/eventInfo', 
-					array(
-						'query' => 'reset=1&action=update&id='. $civi_event_id,
-						'target' => '_blank',
-					)
-				);
+					// if inactive
+					if ( $event['is_active'] == '1' ) {
 
-			}
+						$_item .= l(
+							'Register', 
+							'civicrm/event/register', 
+							array(
+								'query' => 'reset=1&id='. $civi_event_id
+							)
+						);
+						
+					} else {
+					
+						$_item .= '<del>Register</del>';
+
+					}
+					
+					$_item .= '</span>';
+					
+				}
 				
-			// add to list
-			$event_list[] = '<li>'.$_item.'</li>';
+				// add link to CiviCRM Event and Event Edit pages
+				if (user_access('access CiviEvent')) {
+				
+					$_item .= '<span class="date-display-civi-admin-links">';
+
+					// add page link
+					$_item .= 'CiviCRM: '.l(
+						'View', 
+						'civicrm/event/info', 
+						array(
+							'query' => 'reset=1&id='. $civi_event_id,
+							'target' => '_blank',
+						)
+					);
+	
+					// add edit link
+					$_item .= ', '.l(
+						'Edit', 
+						'civicrm/event/manage/eventInfo', 
+						array(
+							'query' => 'reset=1&action=update&id='. $civi_event_id,
+							'target' => '_blank',
+						)
+					);
+	
+					$_item .= '</span>';
+
+				}
+					
+				// add to list
+				$event_list[] = '<li>'.$_item.'</li>';
+				
+			} // end greater than yesterday check
+			
+			// increment counter
+			$count++;
 
 		}
 		
@@ -872,7 +1028,7 @@ function _wpa_civievent_sync_create_civi_events( &$node, $node_dates ) {
 		// add items that are common to all CiviEvents
 		$civi_event['title'] = $node->title;
 		$civi_event['description'] = $node->body;
-		$civi_event['summary'] = $node->teaser;
+		$civi_event['summary'] = strip_tags( $node->teaser );
 		$civi_event['created_date'] = date( 'Y-m-d h:i:s', $node->created );
 		$civi_event['is_public'] = 1;
 		$civi_event['is_active'] = 1;
@@ -883,6 +1039,11 @@ function _wpa_civievent_sync_create_civi_events( &$node, $node_dates ) {
 	
 		// add location
 		$civi_event['loc_block_id'] = $node->loc_block_id;
+		
+		// if we have a location, set CiviCRM to add map
+		if ( is_numeric( $node->loc_block_id ) ) {
+			$civi_event['is_map'] = 1;
+		}
 	
 		// add registration
 		$civi_event['is_online_registration'] = $node->is_online_registration;
@@ -1053,7 +1214,7 @@ function _wpa_civievent_sync_update_civi_events( &$node, $node_dates, $civi_even
 		// update with new values
 		$civi_event['title'] = $node->title;
 		$civi_event['description'] = $node->body;
-		$civi_event['summary'] = $node->teaser;
+		$civi_event['summary'] = strip_tags( $node->teaser );
 		$civi_event['is_public'] = 1;
 		$civi_event['is_active'] = 1;
 		
@@ -1062,6 +1223,11 @@ function _wpa_civievent_sync_update_civi_events( &$node, $node_dates, $civi_even
 	
 		// update location
 		$civi_event['loc_block_id'] = $node->loc_block_id;
+	
+		// if we have a location, set CiviCRM to add map
+		if ( is_numeric( $node->loc_block_id ) ) {
+			$civi_event['is_map'] = 1;
+		}
 	
 		// add registration
 		$civi_event['is_online_registration'] = $node->is_online_registration;
@@ -1210,9 +1376,6 @@ function _wpa_civievent_sync_delete_civi_events( &$node, $to_delete ) {
 				'error' 
 			);
 			
-			// kick out
-			return;
-
 		}
 		
 		// remove the Drupal Node -> CiviEvent relationship from our table
@@ -1304,7 +1467,7 @@ function _wpa_civievent_sync_get_formatted_participant_roles( &$node ) {
 		'#type' => 'select',
 		'#title' => check_plain($participant_role['description']),
 		'#description' => 'The Role you select here is automatically assigned to people when they register online for this event (usually the default <em>Attendee</em> role).',
-		'#default_value' => 6, // NOTE: for now, use ID=6, Playworker
+		'#default_value' => 2, // NOTE: for now, use ID=2, Volunteer
 		'#options' => $opts,
 		'#multiple' => 0,
 		'#size' => 0,
@@ -1769,7 +1932,7 @@ function _wpa_civievent_sync_customise_taxonomy_form( &$form, &$form_state, $for
 			'#weight' => -20,
 		);
 
-		unset($form['delete']);
+		unset( $form['delete'] );
 
 	}
 
