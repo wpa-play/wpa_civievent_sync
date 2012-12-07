@@ -1,4 +1,22 @@
-<?php /*
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" 
+"http://www.w3.org/TR/html4/loose.dtd">
+<html>
+
+
+
+<head>
+
+<title>WPA CiviEvent Sync Notes</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+</head>
+
+
+
+<body>
+
+<pre>
 --------------------------------------------------------------------------------
 Provides CiviCRM Event content types per CiviCRM Event Type.
 --------------------------------------------------------------------------------
@@ -8,7 +26,7 @@ Provides CiviCRM Event content types per CiviCRM Event Type.
 ** CREDITS **
 
 WPA CiviEvent Sync module is based on:
-Civi Event Node module <http://drupal.org/node/194628#comment-1219728>
+Civi Event Node module: http://drupal.org/node/194628#comment-1219728
 
 
 
@@ -61,7 +79,61 @@ The field name is hardcoded as a constant into this module as 'event_date': rede
 
 ** TO DO **
 
-- use CiviCRM theming to warn the admin user NOT to edit the date on the CiviCRM side (because it won't sync back to drupal)
+- use CiviCRM theming to warn the admin user NOT to edit the date on the CiviCRM side (because it won't sync back to Drupal)
+
+
+
+** PATCHES **
+
+You will need to patch the Drupal date_repeat module, whose timezone handling is broken. The following is a dump from a patch file which shows what needs amending:
+
++++ sites/all/modules/date/date_repeat/date_repeat_form.inc
+@@ -174,7 +174,11 @@ function _date_repeat_rrule_process($ele
+   for ($i = 0; $i <= $max; $i++) {
+     $EXCEPT = '';
+     if (!empty($exceptions[$i]['datetime'])) {
+-      $EXCEPT = $exceptions[$i]['datetime'];
++      //$EXCEPT = $exceptions[$i]['datetime'];
++      // fixed as per http://drupal.org/node/1619916#comment-6092500
++      $except_date = date_make_date($exceptions[$i]['datetime'], $exceptions[$i]['tz']);
++      date_timezone_set($except_date, timezone_open($timezone));
++      $EXCEPT = date_format($except_date, DATE_FORMAT_DATETIME);
+     }
+     $element['exceptions']['EXDATE'][$i] = array(
+       '#tree' => TRUE,
+
++++ sites/all/modules/date/date_repeat/date_repeat.module
+@@ -243,9 +243,17 @@ function date_repeat_rrule_description($
+   }
+   if ($exceptions) {
+     $values = array();
++    /*
+     foreach ($exceptions as $exception) {
+       $values[] = date_format_date(date_ical_date($exception), 'custom', $format);
+     }
++    */
++    // fixed as per http://drupal.org/node/1619916#comment-6092500
++    foreach ($exceptions as $exception) {
++      $exception = date_ical_date($exception, 'UTC');
++      date_timezone_set($exception, date_default_timezone());
++      $values[] = date_format_date($exception, 'custom', $format);
++    }
+     $description['!except'] = trim(t('!repeats_every_interval except !except_dates', array('!repeats_every_interval ' => '', '!except_dates' => implode(', ', $values))));
+   }
+   if ($additions) {
+
+
+
+** THEMING **
+
+The date_repeat module makes a bit of a dog's dinner of the human-readable RRULE output.
+Use the following snippet to make it a bit more friendly...
+
+$tmp_output = str_replace( 'every week   every', 'every', $node->field_event_date[0]['view'] ); 
+$tmp_output = str_replace( 'Repeats every', 'Every', $tmp_output ); 
+$tmp_output = str_replace( ' .', '', $tmp_output ); 
+print $tmp_output;
+
 
 
 --------------------------------------------------------------------------------
@@ -291,8 +363,10 @@ node_date( 5/10/2012 11:00 ) -> civi_eid ( 257 )
 --> There's no way to match the node_date with the CiviEvent
 ==> All we can do is loop through the list and update in sequence?
 
-*/
 
 
+</pre>
 
+</body>
 
+</html>
