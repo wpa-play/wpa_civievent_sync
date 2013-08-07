@@ -440,7 +440,7 @@ function wpa_civievent_sync_form( &$node ) {
 function wpa_civievent_sync_form_alter( &$form, &$form_state, $form_id ) {
 
 	// first pass to taxonomy form checker
-	_wpa_civievent_sync_customise_taxonomy_form( &$form, &$form_state, $form_id );
+	_wpa_civievent_sync_customise_taxonomy_form( $form, $form_state, $form_id );
 	
 	// trap our node form
 	if ( $form_id == 'wpa_civievent_sync_node_form' ) {
